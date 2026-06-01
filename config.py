@@ -25,18 +25,18 @@ OWNER_ID = int(os.environ.get("OWNER_ID", "5585016974"))
 PORT = os.environ.get("PORT", "8080")
 
 #Database 
-DB_URI = os.environ.get("DATABASE_URL", "")
-DB_NAME = os.environ.get("DATABASE_NAME", "")
+DB_URI = os.environ.get("DATABASE_URL", "mongodb+srv://solo_bot:solo2319p@cluster0.wiqnf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+DB_NAME = os.environ.get("DATABASE_NAME", "obito")
 
 #force sub channel id, if you want enable force sub
-FORCESUB_CHANNEL = int(os.environ.get("FORCESUB_CHANNEL", ""))
-FORCESUB_CHANNEL2 = int(os.environ.get("FORCESUB_CHANNEL2", ""))
+FORCESUB_CHANNEL = int(os.environ.get("FORCESUB_CHANNEL", "0"))
+FORCESUB_CHANNEL2 = int(os.environ.get("FORCESUB_CHANNEL2", "0"))
 
 TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "4"))
 
 #pics
-START_PIC = os.environ.get("START_PIC", "https://graph.org/file/510affa3d4b6c911c12e3.jpg")
-FORCE_PIC = os.environ.get("FORCE_PIC", "https://graph.org/file/a51caa9b1783e28456147.jpg")
+START_PIC = os.environ.get("START_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
+FORCE_PIC = os.environ.get("FORCE_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
 
 #text
 HELP_TXT = "<b>Hi Dude!\n\nTo use this bot you just have to join both channels that's it..\nWatch Tutorial to open Link - <a href=https://t.me/+sWjn-J89xaVhMDAx>Clickhere</a></b>"
