@@ -3,8 +3,6 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 
-
-
 #Bot token @Botfather
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "7830743177:AAGUVS-Y_R2_lL2uWPgzD7PlOSII2zxJrFM")
 
@@ -72,8 +70,8 @@ PROTECT_CONTENT = True if os.environ.get('PROTECT_CONTENT', "False") == "True" e
 DISABLE_CHANNEL_BUTTON = os.environ.get("DISABLE_CHANNEL_BUTTON", None) == 'True'
 
 #Short Url or Api
-SHORT_URL = os.environ.get("SHORTNER_URL", "publicearn.com")
-SHORT_API = os.environ.get("SHORTNER_API", "0")
+SHORT_URL = os.environ.get("SHORTNER_URL", "linkshortify.com")
+SHORT_API = os.environ.get("SHORTNER_API", "d80d61b30e064261adf28d8575422ef4f2efdfa8")
 
 BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
 USER_REPLY_TEXT = "Pʟᴇᴀꜱᴇ ᴅᴏɴ'ᴛ ᴍᴇꜱꜱᴀɢᴇ ᴍᴇ ᴅɪʀᴇᴄᴛʟʏ ɪ ᴀᴍ ᴏɴʟʏ ᴡᴏʀᴋ ꜰᴏʀ - @Anime_X_Hunters"
@@ -107,5 +105,3 @@ logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
 def LOGGER(name: str) -> logging.Logger:
     return logging.getLogger(name)
-
-#Bhen ke lavdo Credit hataya na ma choddunga wahi aakr salo use karo bas 
