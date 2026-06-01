@@ -16,7 +16,7 @@ API_HASH = os.environ.get("API_HASH", "5fecf44f5dd9f46410d6d835491ae4a3")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002177334941"))
 
 #OWNER ID
-OWNER_ID = int(os.environ.get("OWNER_ID", "5585016974"))
+OWNER_ID = int(os.environ.get("OWNER_ID", "6654561076"))
 
 #Port
 PORT = os.environ.get("PORT", "8080")
@@ -36,12 +36,12 @@ START_PIC = os.environ.get("START_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
 FORCE_PIC = os.environ.get("FORCE_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
 
 #text
-HELP_TXT = """<b><blockquote>⚠️ Hᴇʏ, {mention} ×</blockquote>
+HELP_TXT = """<b><blockquote>⚠️ Hᴇʏ, {} ×</blockquote>
 Yᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ {count}/{total} ᴄʜᴀɴɴᴇʟs ʏᴇᴛ. Pʟᴇᴀsᴇ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟs ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. !
 
 ❗Fᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs, ᴜsᴇ: /help</b>"""
 
-ABOUT_TXT = """<b>🤖 ᴍʏ ɴᴀᴍᴇ: {botname}
+ABOUT_TXT = """<b>🤖 ᴍʏ ɴᴀᴍᴇ: tessia
 <b>» ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href=https://t.me/i_killed_my_clan>ᴏʙɪᴛᴏ</a></b>"""
 
 SHORT_MSG = "Your Link is down here click on Short URL.."
