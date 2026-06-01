@@ -1,14 +1,12 @@
-#(©)Codexbotz
-#rymme
-
-
-
-
-
 from aiohttp import web
+import os
 
-routes = web.RouteTableDef()
+async def handle(request):
+    return web.Response(text="Bot is Alive!")
 
-@routes.get("/", allow_head=True)
-async def root_route_handler(request):
-    return web.json_response("CodeXBotz")
+app = web.Application()
+app.router.add_get('/', handle)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    web.run_app(app, host="0.0.0.0", port=port)
