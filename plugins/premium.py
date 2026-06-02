@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 from bot import Bot
-from database.database import is_premium, remove_premium, get_premium_users, add_premium
+from database.database import obito
 from config import OWNER_ID
 
 @Bot.on_message(filters.command('add_premium') & filters.user(OWNER_ID))
