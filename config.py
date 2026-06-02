@@ -74,14 +74,14 @@ SHORT_URL = os.environ.get("SHORTNER_URL", "Arolinks.com")
 SHORT_API = os.environ.get("SHORTNER_API", "7aed91f9dd06cf474ec93216ad40345985949d63")
 
 BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
-USER_REPLY_TEXT = "Pʟᴇᴀꜱᴇ ᴅᴏɴ'ᴛ ᴍᴇꜱꜱᴀɢᴇ ᴍᴇ ᴅɪʀᴇᴄᴛʟʏ ɪ ᴀᴍ ᴏɴʟʏ ᴡᴏʀᴋ ꜰᴏʀ - @Anime_X_Hunters"
+USER_REPLY_TEXT = "Pʟᴇᴀꜱᴇ ᴅᴏɴ'ᴛ ᴍᴇꜱꜱᴀɢᴇ ᴍᴇ ᴅɪʀᴇᴄᴛʟʏ ɪ ᴀᴍ ᴏɴʟʏ ᴡᴏʀᴋ ꜰᴏʀ - @AnimeInHindi094"
 
 AUTO_DEL = os.environ.get("AUTO_DEL", "True")
 DEL_TIMER = int(os.environ.get("DEL_TIMER", "600"))
 DEL_MSG = "<b>This File is deleting automatically in {time}. Forward in your Saved Messages..!</b>"
 
-ADMINS.append(OWNER_ID)
-ADMINS.append(5090651635)
+ADMINS.append(5585016974)
+ADMINS.append(5585016974)
 
 LOG_FILE_NAME = "filesharingbot.txt"
 
