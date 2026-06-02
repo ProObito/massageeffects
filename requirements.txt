@@ -5,3 +5,4 @@ pymongo
 dnspython==2.3.0
 aiohttp
 requests
+motor
