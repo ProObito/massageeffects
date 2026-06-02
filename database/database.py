@@ -3,23 +3,24 @@ import time
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import DB_URI, DB_NAME
 
-# Asynchronous Database Client Setup
+# Asynchronous Database Client Setup (Non-blocking for Pyrogram)
 dbclient = AsyncIOMotorClient(DB_URI)
 database = dbclient[DB_NAME]
 
-# Database collections
+# Database collections mapping
 user_data = database['users']
 premium_user = database['premium']
 channels_col = database['fsub_channels']
 admins_col = database['bot_admins']
 banned_col = database['banned_users']
 orders_col = database['payment_orders']
+shortener_col = database['shortener_settings']
 
 class ObitoDB:
     def __init__(self):
         pass
 
-    # ==================== EXISTING USER FUNCTIONS ====================
+    # ==================== 1. USER BASE FUNCTIONS ====================
     async def present_user(self, user_id: int):
         found = await user_data.find_one({'_id': user_id})
         return bool(found)
@@ -39,11 +40,11 @@ class ObitoDB:
         await user_data.delete_one({'_id': user_id})
         return
 
-    # ==================== EXISTING PREMIUM FUNCTIONS ====================
+    # ==================== 2. PREMIUM USER FUNCTIONS ====================
     async def is_premium(self, user_id: int):
         found = await premium_user.find_one({'_id': user_id})
         if found:
-            # Check expiry time if exists
+            # Check if premium plan has expired dynamically
             expiry = found.get('expiry')
             if expiry and time.time() > expiry:
                 await self.remove_premium(user_id)
@@ -70,7 +71,7 @@ class ObitoDB:
         await premium_user.delete_one({'_id': user_id})
         return
 
-    # ==================== ADVANCED FSUB CHANNELS ====================
+    # ==================== 3. ADVANCED FSUB CHANNELS ====================
     async def get_all_channels(self):
         channels = []
         async for doc in channels_col.find({}):
@@ -87,7 +88,7 @@ class ObitoDB:
         res = await channels_col.delete_one({'channel_id': channel_id})
         return res.deleted_count > 0
 
-    # ==================== ADVANCED BOT ADMINS ====================
+    # ==================== 4. ADVANCED BOT ADMINS ====================
     async def get_all_admins(self):
         admins = []
         async for doc in admins_col.find({}):
@@ -104,7 +105,7 @@ class ObitoDB:
         res = await admins_col.delete_one({'admin_id': admin_id})
         return res.deleted_count > 0
 
-    # ==================== ADVANCED BANNED USERS ====================
+    # ==================== 5. ADVANCED BANNED USERS ====================
     async def get_ban_users(self):
         banned = []
         async for doc in banned_col.find({}):
@@ -121,7 +122,7 @@ class ObitoDB:
         res = await banned_col.delete_one({'user_id': user_id})
         return res.deleted_count > 0
 
-    # ==================== AUTO PAYMENT ORDERS ====================
+    # ==================== 6. AUTO PAYMENT ORDERS ====================
     async def save_payment_order(self, order_id: str, user_id: int, amount: float):
         await orders_col.insert_one({
             'order_id': order_id,
@@ -134,5 +135,36 @@ class ObitoDB:
     async def update_order_status(self, order_id: str, status: str):
         await orders_col.update_one({'order_id': order_id}, {'$set': {'status': status}})
 
-# Database Object Instance (Exported globally)
+    # ==================== 7. DYNAMIC INLINE SHORTENER ====================
+    async def get_shortener_settings(self):
+        settings = await shortener_col.find_one({'_id': 'bot_settings'})
+        if not settings:
+            default = {'_id': 'bot_settings', 'url': None, 'api': None, 'mode': 'Token Mode'}
+            await shortener_col.insert_one(default)
+            return default
+        return settings
+
+    async def update_shortener(self, url: str, api: str):
+        await shortener_col.update_one(
+            {'_id': 'bot_settings'},
+            {'$set': {'url': url, 'api': api}},
+            upsert=True
+        )
+
+    async def remove_shortener(self):
+        await shortener_col.update_one(
+            {'_id': 'bot_settings'},
+            {'$set': {'url': None, 'api': None}}
+        )
+
+    async def toggle_shortener_mode(self, current_mode: str):
+        new_mode = "1-Time Mode" if current_mode == "Token Mode" else "Token Mode"
+        await shortener_col.update_one(
+            {'_id': 'bot_settings'},
+            {'$set': {'mode': new_mode}}
+        )
+        return new_mode
+
+# Database instance globally accessible under 'obito' name mapping
 obito = ObitoDB()
+    
