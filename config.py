@@ -67,7 +67,7 @@ CUSTOM_CAPTION = os.environ.get("CUSTOM_CAPTION", None)
 PROTECT_CONTENT = True if os.environ.get('PROTECT_CONTENT', "False") == "True" else False
 
 #Set true if you want Disable your Channel Posts Share button
-DISABLE_CHANNEL_BUTTON = os.environ.get("DISABLE_CHANNEL_BUTTON", None) == 'True'
+DISABLE_CHANNEL_BUTTON = os.environ.get("DISABLE_CHANNEL_BUTTON", False) == 'True'
 
 #Short Url or Api
 SHORT_URL = os.environ.get("SHORTNER_URL", "Arolinks.com")
@@ -75,6 +75,36 @@ SHORT_API = os.environ.get("SHORTNER_API", "7aed91f9dd06cf474ec93216ad4034598594
 
 BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
 USER_REPLY_TEXT = "Pʟᴇᴀꜱᴇ ᴅᴏɴ'ᴛ ᴍᴇꜱꜱᴀɢᴇ ᴍᴇ ᴅɪʀᴇᴄᴛʟʏ ɪ ᴀᴍ ᴏɴʟʏ ᴡᴏʀᴋ ꜰᴏʀ - @AnimeInHindi094"
+
+PLAN_TEXT = """
+✨ <b>Exclusive Premium Membership</b> ✨
+> <i>Unlock a World of Benefits Just for You!</i>
+
+🔥 <b>Premium Perks:</b>
+> ✔️ <b>Direct Channel Link</b> – No Ads, No Distractions!
+> ✔️ <b>Special Access</b> to Exclusive Events & Content
+> ✔️ <b>Faster Support</b> & Priority Assistance
+
+💭 <b>Plus:</b> You'll get direct access to all the videos with any of these plans!
+
+💰 <b>Affordable Pricing:</b>
+> ○ <b>7 Days:</b> INR 60
+> ○ <b>1 Month:</b> INR 140
+> ○ <b>3 Months:</b> INR 299
+> ○ <b>4 Months:</b> INR 400
+> ○ <b>6 Months:</b> INR 550 
+
+👤 <b>User:</b> {user_mention}
+🆔 <b>Account ID:</b> <code>{user_id}</code>
+📦 <b>Purchased Plan:</b> <code>{total_days} Days Plan</code>
+⏳ <b>Remaining Validity:</b> {time_left}
+
+Ready to Upgrade?
+» Message @Its_lozo to get UPI or QR Code for payment.
+» Send a screenshot of your payment to @its_lozo (for Auto Verification).
+
+➡️ <b>Seats are LIMITED for Premium Members – Grab Yours Now!</b>
+"""
 
 AUTO_DEL = os.environ.get("AUTO_DEL", "True")
 DEL_TIMER = int(os.environ.get("DEL_TIMER", "600"))
