@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 from pyrogram import Client, filters, __version__
 from pyrogram.enums import ParseMode, ChatAction
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -10,12 +11,11 @@ from config import ADMINS, FORCE_MSG, OWNER_ID, START_MSG, CUSTOM_CAPTION, DISAB
 from helper_func import subscribed, encode, decode, get_messages, is_banned, is_admin
 from database.database import obito
 from plugins.shorturl import get_dynamic_short_url
-from plugins.autodel import convert_time  # Formatter format logic utilities import
+from plugins.autodel import convert_time  
 
 # ==================== DYNAMIC AUTO DELETE WORKERS ====================
 
 async def delete_message(msg, delay_time):
-    # Check if auto delete state loop is globally enabled on dashboard
     if await obito.get_auto_delete(): 
         await asyncio.sleep(delay_time)    
         try:
@@ -26,18 +26,13 @@ async def delete_message(msg, delay_time):
 async def auto_del_notification(client, msg, delay_time):
     if await obito.get_auto_delete():  
         try:
-            # Custom message response with readable exact converted time string
             readable_time = convert_time(delay_time)
-            reply = await msg.reply_text(DEL_MSG.format(time=readable_time)) 
+            reply = await msg.reply_text(DEL_MSG.format(time=readable_time), disable_web_page_preview=True) 
             await asyncio.sleep(delay_time)
-            try:
-                await reply.delete()
-            except Exception:
-                pass
-            try:
-                await msg.delete()
-            except Exception:
-                pass
+            try: await reply.delete()
+            except Exception: pass
+            try: await msg.delete()
+            except Exception: pass
         except Exception:
             pass
 
@@ -105,7 +100,6 @@ async def start_command(client: Client, message: Message):
             return
         await temp_msg.delete()
 
-        # Database standard cluster se runtime values pull karna
         db_del_timer = await obito.get_del_timer()
         is_autodel_active = await obito.get_auto_delete()
 
@@ -127,7 +121,6 @@ async def start_command(client: Client, message: Message):
                                reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
                 await asyncio.sleep(0.5)
                 
-                # Dynamic Database Timer Trigger passes values to workers background task
                 asyncio.create_task(delete_message(copied_msg, db_del_timer))
                 if idx == len(messages) - 1:
                     last_message = copied_msg
@@ -142,7 +135,6 @@ async def start_command(client: Client, message: Message):
             except Exception as e:
                 print(f"Error copying message: {e}")
 
-        # Dynamic Notification Alert validation state interceptor loop
         if is_autodel_active and last_message:
             asyncio.create_task(auto_del_notification(client, last_message, db_del_timer))
         return
@@ -150,7 +142,7 @@ async def start_command(client: Client, message: Message):
         reply_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("ʜᴇʟᴘ", callback_data='help'),
              InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data='about')],
-            [InlineKeyboardButton("<b>ᴄʟ6ꜱᴇ ✖️</b>", callback_data='close')]
+            [InlineKeyboardButton("ᴄʟ6ѕᴇ ✖️", callback_data='close')]
         ])
         try:
             await message.reply_photo(
@@ -218,9 +210,9 @@ async def not_joined(client: Client, message: Message):
 
     try:
         start_param = message.text.split(" ", 1)[1]
-        buttons.append([InlineKeyboardButton(text='ᴛʀheader_button_retry', url=f"https://t.me/{client.me.username}?start={start_param}")])
+        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start={start_param}")])
     except IndexError:
-        buttons.append([InlineKeyboardButton(text='ᴛʀheader_button_retry', url=f"https://t.me/{client.me.username}?start=true")])
+        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start={true}")])
 
     await message.reply_photo(
         photo=FORCE_PIC,
@@ -251,69 +243,15 @@ async def request_command(client: Client, message: Message):
     await client.send_message(int(OWNER_ID), owner_message)
     await message.reply("Thanks for your request! Your request will be reviewed soon. Please wait.")
 
-@Bot.on_message(filters.command('my_plan') & filters.private & ~is_banned)
-async def my_plan(client: Client, message: Message):
-    user_id = message.from_user.id
-    is_user_premium = await obito.is_premium(user_id)
-
-    if is_user_premium:
-        await message.reply_text("Ads : Disable\nPremium : Unlocked\n\nNice Dude you're a premium user..!")
-    else:
-        await message.reply_text("Ads : Enable\nPremium : Locked\n\nUnlock Premium to get more benefits\nContact - @Okabe_xRintarou..!")
-
 @Bot.on_message(filters.command('users') & filters.private & filters.user(int(OWNER_ID)))
 async def get_users(client: Client, message: Message):
     msg = await message.reply(text=WAIT_MSG)
     users = await obito.full_userbase()
     await msg.edit(f"{len(users)} users are using this bot")
 
-@Bot.on_message(filters.private & filters.command('broadcast') & is_admin & ~is_banned)
-async def send_text(client: Client, message: Message):
-    if message.reply_to_message:
-        query = await obito.full_userbase()
-        broadcast_msg = message.reply_to_message
-        total = 0
-        successful = 0
-        blocked = 0
-        deleted = 0
-        unsuccessful = 0
-        
-        pls_wait = await message.reply("<i>Broadcast Processing Till Wait Dude... </i>")
-        for chat_id in query:
-            try:
-                await broadcast_msg.copy(chat_id)
-                successful += 1
-            except FloodWait as e:
-                await asyncio.sleep(e.x)
-                await broadcast_msg.copy(chat_id)
-                successful += 1
-            except UserIsBlocked:
-                await obito.del_user(chat_id)
-                blocked += 1
-            except InputUserDeactivated:
-                await obito.del_user(chat_id)
-                deleted += 1
-            except Exception:
-                unsuccessful += 1
-                pass
-            total += 1
-        
-        status = f"""<b><u>ʙʀ6ᴀᴅᴄ6ꜱᴛ...</u>
 
-Total Users: <code>{total}</code>
-Successful: <code>{successful}</code>
-Blocked Users: <code>{blocked}</code>
-Deleted Accounts: <code>{deleted}</code>
-Unsuccessful: <code>{unsuccessful}</code></b>"""
-        
-        return await pls_wait.edit(status)
-    else:
-        msg = await message.reply(REPLY_ERROR)
-        await asyncio.sleep(8)
-        await msg.delete()
+# ==================== ADVANCED TIMER & PIN BROADCAST SYSTEM ====================
 
-
-# Helper logic text timers ko seconds mein analyze karne ke liye
 def parse_broadcast_timer(time_str: str) -> int:
     if not time_str:
         return 0
@@ -327,7 +265,6 @@ def parse_broadcast_timer(time_str: str) -> int:
     if unit == 'd': return value * 86400
     return 0
 
-# Dynamic Background worker task message delete karne ke liye timer khatam hone par
 async def scheduled_broadcast_deleter(client: Client, chat_id: int, message_id: int, delay: int):
     await asyncio.sleep(delay)
     try:
@@ -335,7 +272,7 @@ async def scheduled_broadcast_deleter(client: Client, chat_id: int, message_id: 
     except Exception:
         pass
 
-@Bot.on_message(filters.private & filters.command(['pbroadcast']) & is_admin & ~is_banned)
+@Bot.on_message(filters.private & filters.command(['broadcast', 'pbroadcast']) & is_admin & ~is_banned)
 async def advanced_broadcast_handler(client: Client, message: Message):
     if not message.reply_to_message:
         return await message.reply_text(
@@ -349,18 +286,15 @@ async def advanced_broadcast_handler(client: Client, message: Message):
             "» <code>/pbroadcast</code> (Permanent broadcast, no deletion)"
         )
 
-    # State parameters detect karein
-    cmd_type = message.command[0].lower() # 'broadcast' ya 'pbroadcast'
+    cmd_type = message.command[0].lower()
     should_pin = True if cmd_type == 'pbroadcast' else False
     
-    # Check timer arg variable mapping
     timer_arg = message.command[1] if len(message.command) > 1 else None
     duration_seconds = parse_broadcast_timer(timer_arg)
     
     is_permanent = True if duration_seconds == 0 else False
     timer_readable = timer_arg.upper() if not is_permanent else "PERMANENT ♾"
 
-    # Fetch users total list registry database
     query = await obito.full_userbase()
     broadcast_msg = message.reply_to_message
     
@@ -379,18 +313,15 @@ async def advanced_broadcast_handler(client: Client, message: Message):
 
     for chat_id in query:
         try:
-            # 1. Message deliver copy loop execution
             copied_msg = await broadcast_msg.copy(chat_id)
             successful += 1
             
-            # 2. Check if specific command requires Pin Layer
             if should_pin:
                 try:
                     await copied_msg.pin(disable_notification=True)
                 except Exception:
                     pass
             
-            # 3. Check if timer is specified (Not permanent task scheduling)
             if not is_permanent:
                 asyncio.create_task(
                     scheduled_broadcast_deleter(
@@ -425,7 +356,6 @@ async def advanced_broadcast_handler(client: Client, message: Message):
             pass
             
         total += 1
-        # Chhote intervals dynamically maintain karne ke liye burst protection delay
         await asyncio.sleep(0.05)
     
     status = f"""<b>📢 <u>ʙʀᴏ6ᴅᴄ6ꜱᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ!</u></b>
@@ -441,4 +371,4 @@ async def advanced_broadcast_handler(client: Client, message: Message):
 ⏱ <b>Task Lifespan:</b> <code>{timer_readable}</code>
 """
     return await pls_wait.edit(status)
-    
+                                             
