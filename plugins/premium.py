@@ -113,7 +113,8 @@ async def my_plan_command(client: Client, message: Message):
             "Ads: Enabled ❌\n"
             "Premium Features: Locked 🔒\n\n"
             "💡 Unlock premium to download files instantly without shorteners!\n"
-            "Contact admin here to buy - @Its_Wriotheslay"
+            "Contact admin here to buy - @Its_Lozo
+            "
         )
         return
 
