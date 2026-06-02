@@ -8,7 +8,7 @@ from pyrogram.errors import FloodWait
 from bot import Bot
 from config import CUSTOM_CAPTION, DISABLE_CHANNEL_BUTTON, PROTECT_CONTENT, START_PIC, ABOUT_TXT, HELP_TXT
 from helper_func import decode, get_messages
-from database.database import add_user, present_user
+from database.database import obito
 
 @Bot.on_message(filters.command('help') & filters.private)
 async def help_cammand(client: Client, message: Message):
