@@ -10,16 +10,16 @@ from config import SHORT_API, SHORT_URL
 from database.database import obito
 from helper_func import is_admin
 
-# ==================== 1. EXISTING STATIC SHORTENER (UPAR KI SIDE) ====================
+# Temp dictionary state changes trace karne ke liye (Bina pyromod ke data hold rakhega)
+SHORTENER_STATE = {}
+
+# ==================== 1. EXISTING STATIC SHORTENER ====================
 
 def generate_random_alphanumeric():
-    """Generate a random 8-letter alphanumeric string."""
     characters = string.ascii_letters + string.digits
-    random_chars = ''.join(random.choice(characters) for _ in range(8))
-    return random_chars
+    return ''.join(random.choice(characters) for _ in range(8))
 
 def get_short(url):
-    """Purana static config shortener logic code"""
     try:
         rget = requests.get(f"https://{SHORT_URL}/api?api={SHORT_API}&url={url}&alias={generate_random_alphanumeric()}")
         rjson = rget.json()
@@ -31,16 +31,14 @@ def get_short(url):
         return url
 
 
-# ==================== 2. NEW DYNAMIC INTERACTIVE SHORTENER LOGIC ====================
+# ==================== 2. DYNAMIC ENGINE INTERACTIVE RUNTIME ====================
 
 async def get_dynamic_short_url(long_url: str) -> str:
-    """Database se settings read karke runtime link short karne wala system"""
     settings = await obito.get_shortener_settings()
     url = settings.get('url')
     api = settings.get('api')
     
     if not url or not api:
-        # Agar bot par koi shortener set nahi hai, toh fallback karke config.py wala use karega
         return get_short(long_url)
         
     api_endpoint = f"https://{url}/api?api={api}&url={long_url}"
@@ -58,7 +56,7 @@ async def get_dynamic_short_url(long_url: str) -> str:
     return long_url
 
 
-# ==================== 3. INLINE PANEL KEYBOARD LAYOUT ====================
+# ==================== 3. INLINE DASHBOARD RENDERING INTERFACES ====================
 
 async def get_shortener_keyboard():
     settings = await obito.get_shortener_settings()
@@ -66,10 +64,10 @@ async def get_shortener_keyboard():
     mode = settings.get('mode') or "Token Mode"
     
     text = (
-        f"🛠 **Sʜᴏʀᴛᴇɴᴇʀ C0ɴғɪɢᴜʀᴀᴛɪᴏɴ Pᴀɴᴇʟ**\n\n"
-        f"🔗 **URL:** `{url}`\n"
-        f"⚙️ **M0ᴅᴇ:** `{mode}`\n\n"
-        f"💡 _Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h access._"
+        f"🛠 <b>Sʜᴏʀᴛᴇɴᴇʀ Cᴏɴғɪɢᴜʀᴀᴛɪᴏɴ Pᴀɴᴇʟ</b>\n\n"
+        f"🔗 <b>🔗 URL:</b> <code>{url}</code>\n"
+        f"⚙️ <b>⚙️ Mᴏᴅᴇ:</b> <code>{mode}</code>\n\n"
+        f"<blockquote>💡 <i>Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h keys.</i></blockquote>"
     )
     
     buttons = [
@@ -87,7 +85,7 @@ async def get_shortener_keyboard():
     return text, InlineKeyboardMarkup(buttons)
 
 
-# ==================== 4. COMMAND & CALLBACK HANDLERS ====================
+# ==================== 4. COMMANDS & DISPATCHER CLUSTER HANDLERS ====================
 
 @Client.on_message(filters.command('shorten') & filters.private & is_admin)
 async def shorten_dashboard_cmd(client: Client, message: Message):
@@ -100,7 +98,6 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
     data = callback_query.data
     user_id = callback_query.from_user.id
     
-    # Permission Validation
     if not await is_admin(None, client, callback_query.message):
         return await callback_query.answer("⚠️ Only Bot Admins can control settings!", show_alert=True)
 
@@ -118,29 +115,58 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
         return await callback_query.message.edit_text(text, reply_markup=markup)
 
     elif data == "set_short":
-        await callback_query.message.delete()
+        # State machine trigger karein
+        SHORTENER_STATE[user_id] = True
         
-        ask_msg = await client.send_message(
-            chat_id=user_id,
-            text="📥 **Please send Shortener URL and API Key together.**\n\n"
-                 "**Format:** `shortener_domain.com | api_key_here`"
+        cancel_markup = InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="cancel_short")]])
+        await callback_query.message.edit_text(
+            "📥 <b>Please send Shortener URL and API Key together as a normal message reply.</b>\n\n"
+            "<b>Format:</b> <code>shortener_domain.com | api_key_here</code>\n\n"
+            "⚠️ <i>Bot abhi aapke agle text message ka wait kar raha hai...</i>",
+            reply_markup=cancel_markup
         )
+        await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("cancel_short"))
+async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    SHORTENER_STATE.pop(user_id, None)
+    await callback_query.answer("Process Cancelled ✖️")
+    text, markup = await get_shortener_keyboard()
+    await callback_query.message.edit_text(text, reply_markup=markup)
+
+
+# ==================== 5. TEXT INTERCEPTOR BACKEND WITHOUT REPLIES ====================
+
+@Client.on_message(filters.private & filters.text & ~filters.command([]))
+async def capture_shortener_input(client: Client, message: Message):
+    user_id = message.from_user.id
+    
+    # Check kya admin active setup configuration cycle mein hai
+    if not SHORTENER_STATE.get(user_id):
+        return # Skip if state tracker is clear/inactive
+
+    # Stop propagation immediate processing loop break clear lock state
+    SHORTENER_STATE.pop(user_id, None)
+    
+    if " | " not in message.text:
+        return await message.reply_text(
+            "❌ <b>Invalid format processing aborted.</b>\n"
+            "Please split parameters using vertical slash bar delimiter.\n\n"
+            "Run <code>/shorten</code> again to configure.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Restart Dashboard", callback_data="cancel_short")]])
+        )
+    
+    try:
+        url_part, api_part = message.text.split(" | ", 1)
+        url_clean = url_part.strip().replace("https://", "").replace("http://", "").strip("/")
+        api_clean = api_part.strip()
         
-        try:
-            # Listening to user response text via pyromod
-            response: Message = await client.listen.message(chat_id=user_id, filters=filters.text, timeout=60)
-            if " | " not in response.text:
-                return await response.reply_text("❌ **Invalid format! Action aborted.** Run `/shorten` again.")
-            
-            url_part, api_part = response.text.split(" | ", 1)
-            url_clean = url_part.strip().replace("https://", "").replace("http://", "").strip("/")
-            api_clean = api_part.strip()
-            
-            await obito.update_shortener(url_clean, api_clean)
-            
-            text, markup = await get_shortener_keyboard()
-            await response.reply_text("✅ **Shortener configuration successfully saved!**", reply_markup=markup)
-            
-        except asyncio.TimeoutError:
-            await client.send_message(chat_id=user_id, text="⚠️ **Timeout exceeded! Session expired.**")
+        await obito.update_shortener(url_clean, api_clean)
         
+        text, markup = await get_shortener_keyboard()
+        await message.reply_text("✅ <b>Shortener settings updated successfully!</b>", reply_markup=markup)
+        
+    except Exception as e:
+        await message.reply_text(f"❌ <b>Internal crash executing configuration:</b> <code>{e}</code>")
