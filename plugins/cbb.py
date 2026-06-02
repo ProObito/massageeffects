@@ -2,7 +2,7 @@ from pyrogram import Client
 from bot import Bot
 from config import OWNER_ID, ABOUT_TXT, HELP_TXT, START_MSG
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from database.database import add_user, del_user, full_userbase, present_user
+from database.database import obito
 
 @Bot.on_callback_query()
 async def cb_handler(client: Bot, query: CallbackQuery):
