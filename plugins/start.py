@@ -161,7 +161,7 @@ async def short_url(client: Client, message: Message, base64_string):
             ],
             [
                 InlineKeyboardButton(text="How to Open", url="https://t.me/CodeFlix_Bots"),
-                InlineKeyboardButton(text="Premium", callback_data="premium")
+                InlineKeyboardButton(text="Premium", url="https://t.me/+lZ_rLJwBKnllODY1")
             ]
         ]
 
