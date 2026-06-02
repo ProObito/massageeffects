@@ -6,13 +6,17 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated
 
 from bot import Bot
-from config import ADMINS, FORCE_MSG, OWNER_ID, START_MSG, CUSTOM_CAPTION, DISABLE_CHANNEL_BUTTON, PROTECT_CONTENT, START_PIC, FORCE_PIC, SHORT_MSG, AUTO_DEL, DEL_TIMER, DEL_MSG
+from config import ADMINS, FORCE_MSG, OWNER_ID, START_MSG, CUSTOM_CAPTION, DISABLE_CHANNEL_BUTTON, PROTECT_CONTENT, START_PIC, FORCE_PIC, SHORT_MSG, DEL_MSG
 from helper_func import subscribed, encode, decode, get_messages, is_banned, is_admin
 from database.database import obito
 from plugins.shorturl import get_dynamic_short_url
+from plugins.autodel import convert_time  # Formatter format logic utilities import
+
+# ==================== DYNAMIC AUTO DELETE WORKERS ====================
 
 async def delete_message(msg, delay_time):
-    if str(AUTO_DEL).lower() == "true": 
+    # Check if auto delete state loop is globally enabled on dashboard
+    if await obito.get_auto_delete(): 
         await asyncio.sleep(delay_time)    
         try:
             await msg.delete()
@@ -20,14 +24,24 @@ async def delete_message(msg, delay_time):
             pass
 
 async def auto_del_notification(client, msg, delay_time):
-    if str(AUTO_DEL).lower() == "true":  
+    if await obito.get_auto_delete():  
         try:
-            reply = await msg.reply_text(DEL_MSG.format(time=delay_time)) 
+            # Custom message response with readable exact converted time string
+            readable_time = convert_time(delay_time)
+            reply = await msg.reply_text(DEL_MSG.format(time=readable_time)) 
             await asyncio.sleep(delay_time)
-            await reply.delete()
-            await msg.delete()
+            try:
+                await reply.delete()
+            except Exception:
+                pass
+            try:
+                await msg.delete()
+            except Exception:
+                pass
         except Exception:
             pass
+
+# ==================== MAIN CORE LOGIC DIRECT HANDLER ====================
 
 @Bot.on_message(filters.command('start') & filters.private & ~is_banned & subscribed)
 async def start_command(client: Client, message: Message):
@@ -91,6 +105,10 @@ async def start_command(client: Client, message: Message):
             return
         await temp_msg.delete()
 
+        # Database standard cluster se runtime values pull karna
+        db_del_timer = await obito.get_del_timer()
+        is_autodel_active = await obito.get_auto_delete()
+
         last_message = None
         for idx, msg in enumerate(messages):
             if bool(CUSTOM_CAPTION) & bool(msg.document):
@@ -108,7 +126,9 @@ async def start_command(client: Client, message: Message):
                 copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML,
                                reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
                 await asyncio.sleep(0.5)
-                asyncio.create_task(delete_message(copied_msg, DEL_TIMER))
+                
+                # Dynamic Database Timer Trigger passes values to workers background task
+                asyncio.create_task(delete_message(copied_msg, db_del_timer))
                 if idx == len(messages) - 1:
                     last_message = copied_msg
             except FloodWait as e:
@@ -116,20 +136,21 @@ async def start_command(client: Client, message: Message):
                 copied_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML,
                                reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
                 await asyncio.sleep(0.5)
-                asyncio.create_task(delete_message(copied_msg, DEL_TIMER))
+                asyncio.create_task(delete_message(copied_msg, db_del_timer))
                 if idx == len(messages) - 1:
                     last_message = copied_msg
             except Exception as e:
                 print(f"Error copying message: {e}")
 
-        if str(AUTO_DEL).lower() == "true" and last_message:
-            asyncio.create_task(auto_del_notification(client, last_message, DEL_TIMER))
+        # Dynamic Notification Alert validation state interceptor loop
+        if is_autodel_active and last_message:
+            asyncio.create_task(auto_del_notification(client, last_message, db_del_timer))
         return
     else:
         reply_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("ʜᴇʟᴘ", callback_data='help'),
              InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data='about')],
-            [InlineKeyboardButton("ᴄʟ6ꜱᴇ", callback_data='close')]
+            [InlineKeyboardButton("<b>ᴄʟ6ꜱᴇ ✖️</b>", callback_data='close')]
         ])
         try:
             await message.reply_photo(
@@ -177,11 +198,9 @@ async def short_url(client: Client, message: Message, base64_string):
 
 @Bot.on_message(filters.command('start') & filters.private & ~is_banned)
 async def not_joined(client: Client, message: Message):
-    # Dynamic FSub channel markup builder
     channels = await obito.get_all_channels()
     buttons = []
     
-    # Rows structure mapping loop
     temp_row = []
     for idx, ch_id in enumerate(channels, start=1):
         try:
@@ -199,9 +218,9 @@ async def not_joined(client: Client, message: Message):
 
     try:
         start_param = message.text.split(" ", 1)[1]
-        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start={start_param}")])
+        buttons.append([InlineKeyboardButton(text='ᴛʀheader_button_retry', url=f"https://t.me/{client.me.username}?start={start_param}")])
     except IndexError:
-        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start=true")])
+        buttons.append([InlineKeyboardButton(text='ᴛʀheader_button_retry', url=f"https://t.me/{client.me.username}?start=true")])
 
     await message.reply_photo(
         photo=FORCE_PIC,
@@ -292,4 +311,134 @@ Unsuccessful: <code>{unsuccessful}</code></b>"""
         msg = await message.reply(REPLY_ERROR)
         await asyncio.sleep(8)
         await msg.delete()
-        
+
+
+# Helper logic text timers ko seconds mein analyze karne ke liye
+def parse_broadcast_timer(time_str: str) -> int:
+    if not time_str:
+        return 0
+    match = re.match(r"(\d+)([smhd])", time_str.lower())
+    if not match:
+        return 0
+    value, unit = int(match.group(1)), match.group(2)
+    if unit == 's': return value
+    if unit == 'm': return value * 60
+    if unit == 'h': return value * 3600
+    if unit == 'd': return value * 86400
+    return 0
+
+# Dynamic Background worker task message delete karne ke liye timer khatam hone par
+async def scheduled_broadcast_deleter(client: Client, chat_id: int, message_id: int, delay: int):
+    await asyncio.sleep(delay)
+    try:
+        await client.delete_messages(chat_id=chat_id, message_ids=message_id)
+    except Exception:
+        pass
+
+@Bot.on_message(filters.private & filters.command(['pbroadcast']) & is_admin & ~is_banned)
+async def advanced_broadcast_handler(client: Client, message: Message):
+    if not message.reply_to_message:
+        return await message.reply_text(
+            "<b>❌ Usage Error!</b>\n\n"
+            "<blockquote>Reply to any message with:</blockquote>\n"
+            "• <code>/broadcast [timer]</code> -> Normal delivery\n"
+            "• <code>/pbroadcast [timer]</code> -> Deliver + Pin inside PM\n\n"
+            "<b>Examples:</b>\n"
+            "» <code>/pbroadcast 24h</code> (Auto delete in 24 hours)\n"
+            "» <code>/broadcast 45m</code> (Auto delete in 45 minutes)\n"
+            "» <code>/pbroadcast</code> (Permanent broadcast, no deletion)"
+        )
+
+    # State parameters detect karein
+    cmd_type = message.command[0].lower() # 'broadcast' ya 'pbroadcast'
+    should_pin = True if cmd_type == 'pbroadcast' else False
+    
+    # Check timer arg variable mapping
+    timer_arg = message.command[1] if len(message.command) > 1 else None
+    duration_seconds = parse_broadcast_timer(timer_arg)
+    
+    is_permanent = True if duration_seconds == 0 else False
+    timer_readable = timer_arg.upper() if not is_permanent else "PERMANENT ♾"
+
+    # Fetch users total list registry database
+    query = await obito.full_userbase()
+    broadcast_msg = message.reply_to_message
+    
+    total = 0
+    successful = 0
+    blocked = 0
+    deleted = 0
+    unsuccessful = 0
+    
+    pls_wait = await message.reply(
+        f"<b>🚀 Broadcast Initialization Started...</b>\n\n"
+        f"⚙️ <b>Type:</b> <code>{cmd_type.upper()}</code>\n"
+        f"⏱ <b>Lifespan:</b> <code>{timer_readable}</code>\n"
+        f"⏳ <i>Please wait till system transfers blocks...</i>"
+    )
+
+    for chat_id in query:
+        try:
+            # 1. Message deliver copy loop execution
+            copied_msg = await broadcast_msg.copy(chat_id)
+            successful += 1
+            
+            # 2. Check if specific command requires Pin Layer
+            if should_pin:
+                try:
+                    await copied_msg.pin(disable_notification=True)
+                except Exception:
+                    pass
+            
+            # 3. Check if timer is specified (Not permanent task scheduling)
+            if not is_permanent:
+                asyncio.create_task(
+                    scheduled_broadcast_deleter(
+                        client=client, 
+                        chat_id=chat_id, 
+                        message_id=copied_msg.id, 
+                        delay=duration_seconds
+                    )
+                )
+
+        except FloodWait as e:
+            await asyncio.sleep(e.x)
+            try:
+                copied_msg = await broadcast_msg.copy(chat_id)
+                successful += 1
+                if should_pin:
+                    try: await copied_msg.pin(disable_notification=True)
+                    except Exception: pass
+                if not is_permanent:
+                    asyncio.create_task(scheduled_broadcast_deleter(client, chat_id, copied_msg.id, duration_seconds))
+            except Exception:
+                unsuccessful += 1
+
+        except UserIsBlocked:
+            await obito.del_user(chat_id)
+            blocked += 1
+        except InputUserDeactivated:
+            await obito.del_user(chat_id)
+            deleted += 1
+        except Exception:
+            unsuccessful += 1
+            pass
+            
+        total += 1
+        # Chhote intervals dynamically maintain karne ke liye burst protection delay
+        await asyncio.sleep(0.05)
+    
+    status = f"""<b>📢 <u>ʙʀᴏ6ᴅᴄ6ꜱᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ!</u></b>
+
+<blockquote>📊 <b>Sᴛ6ᴛs Rᴇᴘ6ʀᴛ:</b></blockquote>
+• <b>Total Users DB:</b> <code>{total}</code>
+• <b>Successful:</b> <code>{successful}</code>
+• <b>Blocked Users Wiped:</b> <code>{blocked}</code>
+• <b>Deleted Accounts Wiped:</b> <code>{deleted}</code>
+• <b>Unsuccessful/Failed:</b> <code>{unsuccessful}</code>
+
+⚙️ <b>Config Mode:</b> <code>{cmd_type.upper()}</code>
+⏱ <b>Task Lifespan:</b> <code>{timer_readable}</code>
+"""
+    return await pls_wait.edit(status)
+    
