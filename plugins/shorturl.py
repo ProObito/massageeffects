@@ -10,10 +10,8 @@ from config import SHORT_API, SHORT_URL
 from database.database import obito
 from helper_func import is_admin
 
-# Temp dictionary state changes trace karne ke liye (Bina pyromod ke data hold rakhega)
+# State tracker dictionary
 SHORTENER_STATE = {}
-
-# ==================== 1. EXISTING STATIC SHORTENER ====================
 
 def generate_random_alphanumeric():
     characters = string.ascii_letters + string.digits
@@ -29,9 +27,6 @@ def get_short(url):
             return url
     except Exception:
         return url
-
-
-# ==================== 2. DYNAMIC ENGINE INTERACTIVE RUNTIME ====================
 
 async def get_dynamic_short_url(long_url: str) -> str:
     settings = await obito.get_shortener_settings()
@@ -55,43 +50,36 @@ async def get_dynamic_short_url(long_url: str) -> str:
         pass
     return long_url
 
-
-# ==================== 3. INLINE DASHBOARD RENDERING INTERFACES ====================
-
 async def get_shortener_keyboard():
     settings = await obito.get_shortener_settings()
     url = settings.get('url') or "Not Set ❌"
     mode = settings.get('mode') or "Token Mode"
     
     text = (
-        f"🛠 <b>Sʜᴏʀᴛᴇɴᴇʀ Cᴏɴғɪɢᴜʀᴀᴛɪᴏɴ Pᴀɴᴇʟ</b>\n\n"
-        f"🔗 <b>🔗 URL:</b> <code>{url}</code>\n"
-        f"⚙️ <b>⚙️ Mᴏᴅᴇ:</b> <code>{mode}</code>\n\n"
+        f"🛠 <b>Sʜ6ʀᴛᴇɴᴇʀ C6ɴғɪɢᴜʀ6ᴛɪ6ɴ P6ɴᴇʟ</b>\n\n"
+        f"🔗 <b>URL:</b> <code>{url}</code>\n"
+        f"⚙️ <b>Moᴅᴇ:</b> <code>{mode}</code>\n\n"
         f"<blockquote>💡 <i>Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h keys.</i></blockquote>"
     )
     
     buttons = [
         [
-            InlineKeyboardButton("➕ Add / Change Shortener", callback_data="set_short"),
-            InlineKeyboardButton("🗑 Remove Shortener", callback_data="del_short")
+            InlineKeyboardButton("➕ Add / Change ", callback_data="set_short"),
+            InlineKeyboardButton("🗑 Remove ", callback_data="del_short")
         ],
         [
             InlineKeyboardButton(f"🔄 Mode: {mode}", callback_data=f"toggle_mode_{mode.replace(' ', '_')}")
         ],
         [
-            InlineKeyboardButton("✖️ Close Panel", callback_data="close")
+            InlineKeyboardButton("✖️ Close", callback_data="close")
         ]
     ]
     return text, InlineKeyboardMarkup(buttons)
-
-
-# ==================== 4. COMMANDS & DISPATCHER CLUSTER HANDLERS ====================
 
 @Client.on_message(filters.command('shorten') & filters.private & is_admin)
 async def shorten_dashboard_cmd(client: Client, message: Message):
     text, reply_markup = await get_shortener_keyboard()
     await message.reply_text(text, reply_markup=reply_markup)
-
 
 @Client.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_)"))
 async def shortener_callback_handler(client: Client, callback_query: CallbackQuery):
@@ -110,23 +98,20 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
     elif data.startswith("toggle_mode_"):
         current_raw = data.split("toggle_mode_")[1].replace("_", " ")
         await obito.toggle_shortener_mode(current_raw)
-        await callback_query.answer("🔄 Shortener operational mode updated!")
+        await callback_query.answer("🔄 Shortener mode updated!")
         text, markup = await get_shortener_keyboard()
         return await callback_query.message.edit_text(text, reply_markup=markup)
 
     elif data == "set_short":
-        # State machine trigger karein
         SHORTENER_STATE[user_id] = True
-        
         cancel_markup = InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="cancel_short")]])
         await callback_query.message.edit_text(
-            "📥 <b>Please send Shortener URL and API Key together as a normal message reply.</b>\n\n"
+            "📥 <b>Please send Shortener URL and API Key together.</b>\n\n"
             "<b>Format:</b> <code>shortener_domain.com | api_key_here</code>\n\n"
-            "⚠️ <i>Bot abhi aapke agle text message ka wait kar raha hai...</i>",
+            "⚠️ <i>bot still waiting for your reply...</i>",
             reply_markup=cancel_markup
         )
         await callback_query.answer()
-
 
 @Client.on_callback_query(filters.regex("cancel_short"))
 async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
@@ -136,27 +121,24 @@ async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     text, markup = await get_shortener_keyboard()
     await callback_query.message.edit_text(text, reply_markup=markup)
 
-
-# ==================== 5. TEXT INTERCEPTOR BACKEND WITHOUT REPLIES ====================
-
-@Client.on_message(filters.private & filters.text & ~filters.command([]))
+# High priority interceptor (group=-1) taaki channel_post se pehle trigger ho
+@Client.on_message(filters.private & filters.text & ~filters.command([]), group=-1)
 async def capture_shortener_input(client: Client, message: Message):
     user_id = message.from_user.id
     
-    # Check kya admin active setup configuration cycle mein hai
     if not SHORTENER_STATE.get(user_id):
-        return # Skip if state tracker is clear/inactive
+        return 
 
-    # Stop propagation immediate processing loop break clear lock state
     SHORTENER_STATE.pop(user_id, None)
     
     if " | " not in message.text:
-        return await message.reply_text(
-            "❌ <b>Invalid format processing aborted.</b>\n"
-            "Please split parameters using vertical slash bar delimiter.\n\n"
+        await message.reply_text(
+            "❌ <b>Invalid format! Processing aborted.</b>\n\n"
             "Run <code>/shorten</code> again to configure.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Restart Dashboard", callback_data="cancel_short")]])
         )
+        message.stop_propagation() # Yahin rok do, link_post par nahi jayega
+        return
     
     try:
         url_part, api_part = message.text.split(" | ", 1)
@@ -169,4 +151,6 @@ async def capture_shortener_input(client: Client, message: Message):
         await message.reply_text("✅ <b>Shortener settings updated successfully!</b>", reply_markup=markup)
         
     except Exception as e:
-        await message.reply_text(f"❌ <b>Internal crash executing configuration:</b> <code>{e}</code>")
+        await message.reply_text(f"❌ <b>Internal Error:</b> <code>{e}</code>")
+        
+    message.stop_propagation() 
