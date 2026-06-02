@@ -1,64 +1,138 @@
-#(©)CodeXBotz
-#recoded by @Its_Oreki_Hotarou
-
-
-import pymongo, os
+# +++ Made By Obito [@i_killed_my_clan] +++
+import time
+from motor.motor_asyncio import AsyncIOMotorClient
 from config import DB_URI, DB_NAME
 
-
-dbclient = pymongo.MongoClient(DB_URI)
+# Asynchronous Database Client Setup
+dbclient = AsyncIOMotorClient(DB_URI)
 database = dbclient[DB_NAME]
 
 # Database collections
 user_data = database['users']
 premium_user = database['premium']
+channels_col = database['fsub_channels']
+admins_col = database['bot_admins']
+banned_col = database['banned_users']
+orders_col = database['payment_orders']
 
+class ObitoDB:
+    def __init__(self):
+        pass
 
-# User functions
-async def present_user(user_id: int):
-    found = user_data.find_one({'_id': user_id})
-    return bool(found)
+    # ==================== EXISTING USER FUNCTIONS ====================
+    async def present_user(self, user_id: int):
+        found = await user_data.find_one({'_id': user_id})
+        return bool(found)
 
+    async def add_user(self, user_id: int):
+        if not await self.present_user(user_id):
+            await user_data.insert_one({'_id': user_id})
+        return
 
-async def add_user(user_id: int):
-    user_data.insert_one({'_id': user_id})
-    return
+    async def full_userbase(self):
+        user_ids = []
+        async for doc in user_data.find({}):
+            user_ids.append(doc['_id'])
+        return user_ids
 
+    async def del_user(self, user_id: int):
+        await user_data.delete_one({'_id': user_id})
+        return
 
-async def full_userbase():
-    user_docs = user_data.find()
-    user_ids = []
-    for doc in user_docs:
-        user_ids.append(doc['_id'])
+    # ==================== EXISTING PREMIUM FUNCTIONS ====================
+    async def is_premium(self, user_id: int):
+        found = await premium_user.find_one({'_id': user_id})
+        if found:
+            # Check expiry time if exists
+            expiry = found.get('expiry')
+            if expiry and time.time() > expiry:
+                await self.remove_premium(user_id)
+                return False
+            return True
+        return False
 
-    return user_ids
+    async def add_premium(self, user_id: int, days: int = 30):
+        expiry_time = time.time() + (days * 24 * 60 * 60)
+        await premium_user.update_one(
+            {'_id': user_id},
+            {'$set': {'expiry': expiry_time}},
+            upsert=True
+        )
+        return
 
+    async def get_premium_users(self):
+        premium_ids = []
+        async for doc in premium_user.find({}):
+            premium_ids.append(doc['_id'])
+        return premium_ids
 
-async def del_user(user_id: int):
-    user_data.delete_one({'_id': user_id})
-    return
+    async def remove_premium(self, user_id: int):
+        await premium_user.delete_one({'_id': user_id})
+        return
 
+    # ==================== ADVANCED FSUB CHANNELS ====================
+    async def get_all_channels(self):
+        channels = []
+        async for doc in channels_col.find({}):
+            channels.append(doc['channel_id'])
+        return channels
 
-# Premium user functions
-async def is_premium(user_id: int):
-    found = premium_user.find_one({'_id': user_id})
-    return bool(found)
+    async def add_channel(self, channel_id: int):
+        if not await channels_col.find_one({'channel_id': channel_id}):
+            await channels_col.insert_one({'channel_id': channel_id})
+            return True
+        return False
 
+    async def del_channel(self, channel_id: int):
+        res = await channels_col.delete_one({'channel_id': channel_id})
+        return res.deleted_count > 0
 
-async def add_premium(user_id: int):
-    premium_user.insert_one({'_id': user_id})
-    return
+    # ==================== ADVANCED BOT ADMINS ====================
+    async def get_all_admins(self):
+        admins = []
+        async for doc in admins_col.find({}):
+            admins.append(doc['admin_id'])
+        return admins
 
+    async def add_admin(self, admin_id: int):
+        if not await admins_col.find_one({'admin_id': admin_id}):
+            await admins_col.insert_one({'admin_id': admin_id})
+            return True
+        return False
 
-async def get_premium_users():
-    premium_docs = premium_user.find()
-    premium_ids = []
-    for doc in premium_docs:
-        premium_ids.append(doc['_id'])
+    async def del_admin(self, admin_id: int):
+        res = await admins_col.delete_one({'admin_id': admin_id})
+        return res.deleted_count > 0
 
-    return premium_ids
+    # ==================== ADVANCED BANNED USERS ====================
+    async def get_ban_users(self):
+        banned = []
+        async for doc in banned_col.find({}):
+            banned.append(doc['user_id'])
+        return banned
 
+    async def add_ban_user(self, user_id: int):
+        if not await banned_col.find_one({'user_id': user_id}):
+            await banned_col.insert_one({'user_id': user_id})
+            return True
+        return False
 
-async def remove_premium(user_id: int):
-    premium_user.delete_one({'_id': user_id})
-    return
+    async def del_ban_user(self, user_id: int):
+        res = await banned_col.delete_one({'user_id': user_id})
+        return res.deleted_count > 0
+
+    # ==================== AUTO PAYMENT ORDERS ====================
+    async def save_payment_order(self, order_id: str, user_id: int, amount: float):
+        await orders_col.insert_one({
+            'order_id': order_id,
+            'user_id': user_id,
+            'amount': amount,
+            'status': 'PENDING',
+            'timestamp': time.time()
+        })
+
+    async def update_order_status(self, order_id: str, status: str):
+        await orders_col.update_one({'order_id': order_id}, {'$set': {'status': status}})
+
+# Database Object Instance (Exported globally)
+obito = ObitoDB()
