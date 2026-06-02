@@ -3,35 +3,73 @@ import re
 import asyncio
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
-from config import FORCESUB_CHANNEL, FORCESUB_CHANNEL2, ADMINS
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant
 from pyrogram.errors import FloodWait
 
-async def is_subscribed(filter, client, update):
-    if not (FORCESUB_CHANNEL or FORCESUB_CHANNEL2):
+from config import OWNER_ID
+from database.database import obito
+
+# ==================== Dynamic Multi-FSub Check ====================
+async def is_subscribed_filter(_, client, update):
+    if not update.from_user:
         return True
 
     user_id = update.from_user.id
 
-    if user_id in ADMINS:
+    # Owner checking bypass
+    if user_id == int(OWNER_ID):
         return True
 
-    member_status = ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER
+    # DB Admins checking bypass
+    admin_ids = await obito.get_all_admins()
+    if user_id in admin_ids:
+        return True
 
-    for channel_id in [FORCESUB_CHANNEL, FORCESUB_CHANNEL2]:
-        if not channel_id:
-            continue
+    # Fetch channels from MongoDB dynamic object
+    channels = await obito.get_all_channels()
+    if not channels:
+        return True
 
+    member_status = [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]
+
+    for channel_id in channels:
         try:
             member = await client.get_chat_member(chat_id=channel_id, user_id=user_id)
+            if member.status not in member_status:
+                return False
         except UserNotParticipant:
             return False
-
-        if member.status not in member_status:
-            return False
+        except Exception:
+            continue
 
     return True
 
+subscribed = filters.create(is_subscribed_filter)
+
+
+# ==================== Dynamic Admin & Ban Verification ====================
+async def admin_check_filter(_, client, message):
+    if not message.from_user:
+        return False
+    user_id = message.from_user.id
+    if user_id == int(OWNER_ID):
+        return True
+    admin_ids = await obito.get_all_admins()
+    return user_id in admin_ids
+
+is_admin = filters.create(admin_check_filter)
+
+
+async def banned_check_filter(_, client, message):
+    if not message.from_user:
+        return False
+    banned_users = await obito.get_ban_users()
+    return message.from_user.id in banned_users
+
+is_banned = filters.create(banned_check_filter)
+
+
+# ==================== Core Utilities ====================
 async def encode(string):
     string_bytes = string.encode("ascii")
     base64_bytes = base64.urlsafe_b64encode(string_bytes)
@@ -111,5 +149,4 @@ def get_readable_time(seconds: int) -> str:
     time_list.reverse()
     up_time += ":".join(time_list)
     return up_time
-
-subscribed = filters.create(is_subscribed)
+    
