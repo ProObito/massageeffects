@@ -15,6 +15,7 @@ admins_col = database['bot_admins']
 banned_col = database['banned_users']
 orders_col = database['payment_orders']
 shortener_col = database['shortener_settings']
+autodel_col = database['autodel_settings']
 
 class ObitoDB:
     def __init__(self):
@@ -165,6 +166,38 @@ class ObitoDB:
         )
         return new_mode
 
-# Database instance globally accessible under 'obito' name mapping
+    # ==================== 8. ON-BOT AUTO DELETE SETTINGS ====================
+    async def get_del_timer(self):
+        settings = await autodel_col.find_one({'_id': 'autodel'})
+        if not settings:
+            return 300  # Default fallback: 5 Minutes (300 Seconds)
+        return settings.get('timer', 300)
+
+    async def set_del_timer(self, seconds: int):
+        await autodel_col.update_one(
+            {'_id': 'autodel'},
+            {'$set': {'timer': seconds}},
+            upsert=True
+        )
+
+    async def get_auto_delete(self):
+        settings = await autodel_col.find_one({'_id': 'autodel'})
+        if not settings:
+            return True  # Default state: Enabled
+        return settings.get('enabled', True)
+
+    async def toggle_auto_delete(self):
+        current = await self.get_auto_delete()
+        new_state = not current
+        await autodel_col.update_one(
+            {'_id': 'autodel'},
+            {'$set': {'enabled': new_state}},
+            upsert=True
+        )
+        return new_state
+
+
+# ==================== EXPORT INSTANCE (CLASS KE BAHAR) ====================
+# Pure bot files mein access karne ke liye mapping object
 obito = ObitoDB()
-    
+        
