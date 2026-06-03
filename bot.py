@@ -2,15 +2,18 @@ from aiohttp import web
 from plugins import web_server
 
 import pyromod.listen
-from pyrogram import Client
+from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
 import sys
+import asyncio
 from datetime import datetime
 import pyrogram.utils
 
-from config import API_HASH, APP_ID, LOGGER, TG_BOT_TOKEN, TG_BOT_WORKERS, FORCESUB_CHANNEL, FORCESUB_CHANNEL2, CHANNEL_ID, PORT
+from config import API_HASH, APP_ID, LOGGER, TG_BOT_TOKEN, TG_BOT_WORKERS, FORCESUB_CHANNEL, FORCESUB_CHANNEL2, CHANNEL_ID, PORT, OWNER_ID
+from helper_func import is_admin, is_banned
 
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
+
 class Bot(Client):
     def __init__(self):
         super().__init__(
@@ -29,6 +32,7 @@ class Bot(Client):
         await super().start()
         usr_bot_me = await self.get_me()
         self.uptime = datetime.now()
+        self.username = usr_bot_me.username
 
         if FORCESUB_CHANNEL:
             try:
@@ -40,9 +44,8 @@ class Bot(Client):
             except Exception as a:
                 self.LOGGER(__name__).warning(a)
                 self.LOGGER(__name__).warning("Bot can't Export Invite link from Force Sub Channel!")
-                self.LOGGER(__name__).warning(f"Please Double check the FORCESUB_CHANNEL value and Make sure Bot is Admin in channel with Invite Users via Link Permission, Current Force Sub Channel Value: {FORCESUB_CHANNEL}")
-                self.LOGGER(__name__).info("\nBot Stopped. Join https://t.me/Hunters_Discussion for support")
                 sys.exit()
+                
         if FORCESUB_CHANNEL2:
             try:
                 link = (await self.get_chat(FORCESUB_CHANNEL2)).invite_link
@@ -53,32 +56,31 @@ class Bot(Client):
             except Exception as a:
                 self.LOGGER(__name__).warning(a)
                 self.LOGGER(__name__).warning("Bot can't Export Invite link from Force Sub Channel!")
-                self.LOGGER(__name__).warning(f"Please Double check the FORCESUB_CHANNEL2 value and Make sure Bot is Admin in channel with Invite Users via Link Permission, Current Force Sub Channel Value: {FORCESUB_CHANNEL2}")
-                self.LOGGER(__name__).info("\nBot Stopped. Join https://t.me/Hunters_Discussion for support")
                 sys.exit()
+                
         try:
             db_channel = await self.get_chat(CHANNEL_ID)
             self.db_channel = db_channel
-            test = await self.send_message(chat_id = db_channel.id, text = "Test Message")
+            test = await self.send_message(chat_id=db_channel.id, text="Test Message")
             await test.delete()
         except Exception as e:
             self.LOGGER(__name__).warning(e)
-            self.LOGGER(__name__).warning(f"Make Sure bot is Admin in DB Channel, and Double check the CHANNEL_ID Value, Current Value {CHANNEL_ID}")
-            self.LOGGER(__name__).info("\nBot Stopped. Join https://t.me/Hunters_Discussion for support")
             sys.exit()
 
         self.set_parse_mode(ParseMode.HTML)
-        self.LOGGER(__name__).info(f"Bot Running..!\n\nCreated by \nhttps://t.me/Animes_X_Hunters")
-        self.LOGGER(__name__).info(f""" \n\n       
-░█████╗░███╗░░██╗██╗███╗░░░███╗███████╗██╗░░██╗██╗░░░██╗███╗░░██╗████████╗███████╗██████╗░░██████╗
-██╔══██╗████╗░██║██║████╗░████║██╔════╝██║░░██║██║░░░██║████╗░██║╚══██╔══╝██╔════╝██╔══██╗██╔════╝
-███████║██╔██╗██║██║██╔████╔██║█████╗░░███████║██║░░░██║██╔██╗██║░░░██║░░░█████╗░░██████╔╝╚█████╗░
-██╔══██║██║╚████║██║██║╚██╔╝██║██╔══╝░░██╔══██║██║░░░██║██║╚████║░░░██║░░░██╔══╝░░██╔══██╗░╚═══██╗
-██║░░██║██║░╚███║██║██║░╚═╝░██║███████╗██║░░██║╚██████╔╝██║░╚███║░░░██║░░░███████╗██║░░██║██████╔╝
-╚═╝░░╚═╝╚═╝░░╚══╝╚═╝╚═╝░░░░░╚═╝╚══════╝╚═╝░░╚═╝░╚═════╝░╚═╝░░╚══╝░░░╚═╝░░░╚══════╝╚═╝░░╚═╝╚═════╝░
-                                          """)
-        self.username = usr_bot_me.username
-        #web-response
+        self.LOGGER(__name__).info("Bot Running..! Created by @AnimeInHindi094")
+        
+        # ==================== STARTUP NOTIFICATION FOR OWNER ====================
+        try:
+            await self.send_message(
+                chat_id=int(OWNER_ID),
+                text="🚀 <b>Bot is successfully Online & Connected with MongoDB Cluster!</b>\n\n"
+                     "⚡ <i>All systems and dynamic interceptors are functioning smoothly.</i>"
+            )
+        except Exception as e:
+            self.LOGGER(__name__).warning(f"Could not notify owner on startup: {e}")
+
+        # Web-response (Koyeb health check passes setup)
         app = web.AppRunner(await web_server())
         await app.setup()
         bind_address = "0.0.0.0"
@@ -87,3 +89,49 @@ class Bot(Client):
     async def stop(self, *args):
         await super().stop()
         self.LOGGER(__name__).info("Bot stopped.")
+
+
+# ==================== DYNAMIC /COMMANDS LIST REGISTRY ====================
+
+@Client.on_message(filters.command(['commands', 'help_cmd']) & filters.private & ~is_banned)
+async def bot_commands_dictionary_list(client: Bot, message):
+    user_id = message.from_user.id
+    
+    # Base user commands menu template layout
+    commands_text = (
+        "📜 <b>🤖 BOT COMMANDS DICTIONARY PANEL</b>\n\n"
+        "✨ <b>👤 USER COMMANDS:</b>\n"
+        "• <code>/start</code> - Wake up the bot and load active file database links.\n"
+        "• <code>/my_plan</code> - Check your active premium membership validity and expiry countdown.\n"
+        "• <code>/request</code> - Submit a direct movie or series request privately to the admin team.\n\n"
+    )
+    
+    # Validate privileges to render privileged commands menu sections
+    if await is_admin(None, client, message):
+        commands_text += (
+            "⚙️ <b>🛠 ADMIN CONTROL COMMANDS:</b>\n"
+            "• <code>/shorten</code> - Open the inline panel to dynamically configure or remove url shorteners.\n"
+            "• <code>/auto_del</code> - Adjust configuration variables for message deletion timers and modes.\n"
+            "• <code>/fsub_chnl</code> - View the complete registry of active dynamic multi-fsub channels.\n"
+            "• <code>/add_banuser [id]</code> - Blacklist a specific user and permanently restrict bot access.\n"
+            "• <code>/del_banuser [id]</code> - Unban a user from the database blacklist registry.\n"
+            "• <code>/banuser_list</code> - Inspect the log of all currently banned accounts.\n\n"
+            
+            "👑 <b>🔥 OWNER EXCLUSIVE POWER COMMANDS:</b>\n"
+            "• <code>/add_premium [id] [days]</code> - Allot ad-free premium system access to a user for specific days.\n"
+            "• <code>/remove_premium [id]</code> - Instantly wipe out a user's paid premium plan permissions.\n"
+            "• <code>/list_premium</code> - Render a summary of all currently active premium paid accounts.\n"
+            "• <code>/add_fsub [channel_id]</code> - Link a new channel to the dynamic force subscription engine.\n"
+            "• <code>/del_fsub [channel_id / all]</code> - Remove specific or all channels from force subscribe checking.\n"
+            "• <code>/add_admins [id]</code> - Appoint a user as a secondary bot manager inside the database.\n"
+            "• <code>/del_admins [id]</code> - Revoke bot manager privileges from a specific admin account.\n"
+            "• <code>/admin_list</code> - Monitor and fetch metadata profiles of all existing bot admins.\n"
+            "• <code>/broadcast [timer]</code> - Deliver structural broadcast drops (e.g., <code>24h</code> for temporary delivery).\n"
+            "• <code>/pbroadcast [timer]</code> - Distribute dynamic broadcasts and automatically pin them inside the user's PM inbox.\n"
+        )
+        
+    await message.reply_text(
+        text=commands_text,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Close Menu", callback_data="close")]])
+    )
+    
