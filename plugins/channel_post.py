@@ -15,7 +15,7 @@ command_list = [
     'info', 'add_fsub', 'fsub_chnl', 'restart', 'del_fsub', 'add_admins', 
     'del_admins', 'admin_list', 'cancel', 'auto_del', 'forcesub', 'files', 
     'add_banuser', 'del_banuser', 'banuser_list', 'status', 'req_fsub',
-    'add_premium', 'remove_premium', 'list_premium', 'my_plan', 'shorten', 'premium'
+    'add_premium', 'commands', 'help_cmd', 'remove_premium', 'list_premium', 'my_plan', 'shorten', 'premium'
 ]
 
 @Bot.on_message(filters.private & filters.user(ADMINS) & ~filters.command(command_list))
