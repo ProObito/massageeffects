@@ -2,7 +2,7 @@
 
 import asyncio
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.enums import ChatAction
 from datetime import datetime, timedelta
 
@@ -11,35 +11,26 @@ from config import OWNER_ID, START_PIC
 from database.database import obito
 from helper_func import is_admin, is_banned
 
-# Global state tracker timers updates track karne ke liye
+# Global state tracker to safely handle setting states across multiple workers
 AUTODEL_STATE = {}
 
 on_txt = "<code>ENABLED ✅</code>"
 off_txt = "<code>DISABLED ❌</code>"
 autodel_cmd_pic = START_PIC
 
-# Commands list jise autodel handler ko bilkul touch nahi karna hai
-AUTODEL_IGNORE_COMMANDS = [
-    'start', 'users', 'broadcast', 'pbroadcast', 'batch', 'flink', 'genlink', 'help', 'cmd', 
-    'info', 'add_fsub', 'fsub_chnl', 'restart', 'del_fsub', 'add_admins', 
-    'del_admins', 'admin_list', 'cancel', 'auto_del', 'forcesub', 'files', 
-    'add_banuser', 'del_banuser', 'banuser_list', 'status', 'req_fsub',
-    'add_premium', 'remove_premium', 'list_premium', 'my_plan', 'shorten', 'premium'
-]
-
 AUTODEL_CMD_TXT = """
-⚙️ <b>Aᴜᴛ6 Dᴇʟᴇᴛᴇ C6ɴғɪɢᴜʀ6ᴛɪ6ɴ P6ɴᴇʟ</b>
+⚙️ <b>Auto Delete Configuration Panel</b>
 
-◈ <b>Sᴛ6ᴛᴜs:</b> {autodel_mode}
-◈ <b>Cᴜʀʀᴇɴᴛ Tɪᴍᴇr:</b> <code>{timer}</code>
+◈ <b>Status:</b> {autodel_mode}
+◈ <b>Current Timer:</b> <code>{timer}</code>
 
-<blockquote>💡 <i>Tip: Enabled rehne par files user ko deliver hone ke baad set timer ke mutabik auto-delete ho jayengi.</i></blockquote>
+<blockquote>💡 <i>Tip: When enabled, files will be automatically deleted based on the set timer after being delivered to the user.</i></blockquote>
 """
 
-DEL_MSG = """<b>⚠️ Dᴜᴇ ᴛ6 C6ᴘʏʀɪɢʜᴛ ɪssᴜᴇs....
-<blockquote>Y6ᴜʀ ғɪʟᴇs ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ᴡɪᴛʜɪɴ <a href="https://t.me/{username}">{time}</a>. S6 ᴘʟᴇ6sᴇ ғ6ʀᴡ6ʀᴅ ᴛʜᴇᴍ ᴛ6 6ɴʏ 6ᴛʜᴇʀ ᴘʟ6ᴄᴇ ғ6ʀ ғᴜᴛᴜʀᴇ 6ᴠ6ɪʟ6ʙɪʟɪᴛʏ.</blockquote></b>"""
+DEL_MSG = """<b>⚠️ Due to Copyright issues....
+<blockquote>Your files will be deleted within <a href="https://t.me/{username}">{time}</a>. So please forward them to any other place for future availability.</blockquote></b>"""
 
-# ==================== 1. PURANA ORGANIC TIME CONVERSION ====================
+# ==================== 1. TIME CONVERSION UTILITIES ====================
 
 def convert_time(duration_seconds: int) -> str:
     periods = [
@@ -75,16 +66,16 @@ async def auto_del_notification(bot_username, msg, delay_time, transfer):
     try:
         if transfer:
             try:
-                name = "♻️ Cʟɪᴄᴋ Hᴇʀᴇ"
+                name = "♻️ Click Here"
                 link = f"https://t.me/{bot_username}?start={transfer}"
-                button = [[InlineKeyboardButton(text=name, url=link), InlineKeyboardButton(text="Cʟ6sᴇ ✖️", callback_data="close")]]
+                button = [[InlineKeyboardButton(text=name, url=link), InlineKeyboardButton(text="Close ✖️", callback_data="close")]]
 
-                await temp.edit_text(text=f"<b>Pʀᴇᴠɪ6ᴜs Mᴇss6ɢᴇ ᴡ6s Dᴇʟᴇᴛᴇᴅ 🗑\n<blockquote>Iғ ʏ6ᴜ ᴡ6ɴᴛ ᴛ6 ɢᴇᴛ ᴛ... ғɪʟᴇs 6ɢ6ɪɴ, ᴛʜᴇɴ ᴄʟɪᴄᴋ: [<a href={link}>{name}</a>] ʙᴜᴛᴛ6ɴ ʙᴇʟ6ᴡ ᴇʟsᴇ ᴄʟ6sᴇ ᴛ... ᴍᴇss6ɢᴇ.</blockquote></b>", reply_markup=InlineKeyboardMarkup(button), disable_web_page_preview=True)
+                await temp.edit_text(text=f"<b>Previous Message was Deleted 🗑\n<blockquote>If you want to get the files again, then click: [<a href={link}>{name}</a>] button below else close this message.</blockquote></b>", reply_markup=InlineKeyboardMarkup(button), disable_web_page_preview=True)
             except Exception as e:
-                await temp.edit_text(f"<b><blockquote>Pʀᴇᴠɪ6ᴜs Mᴇss6ɢᴇ ᴡ6s Dᴇʟᴇᴛᴇdeleted 🗑</blockquote></b>")
+                await temp.edit_text(f"<b><blockquote>Previous Message was Deleted 🗑</blockquote></b>")
                 print(f"Error editing text: {e}")
         else:
-            await temp.edit_text(f"<b><blockquote>Pʀᴇᴠɪ6ᴜs Mᴇss6ɢᴇ ᴡ6s Dᴇʟᴇᴛᴇᴅ 🗑</blockquote></b>")
+            await temp.edit_text(f"<b><blockquote>Previous Message was Deleted 🗑</blockquote></b>")
     except Exception as e:
         print(f"Error editing text: {e}")
 
@@ -112,19 +103,19 @@ async def autoDelete_settings(client: Client, message: Message):
         is_enabled = await obito.get_auto_delete()
         
         autodel_mode = on_txt if is_enabled else off_txt
-        mode = 'Dɪsᴀʙʟᴇ M6ᴅᴇ ❌' if is_enabled else 'Eɴ6ʙʟᴇ M6ᴅᴇ ✅'
+        mode = 'Disable Mode ❌' if is_enabled else 'Enable Mode ✅'
         
         await message.reply_photo(
             photo=autodel_cmd_pic,
             caption=AUTODEL_CMD_TXT.format(autodel_mode=autodel_mode, timer=timer),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Sᴇᴛ Tɪᴍᴇʀ ⏱', callback_data='set_timer')],
-                [InlineKeyboardButton('🔄 Rᴇғʀᴇsʜ', callback_data='autodel_cmd'), InlineKeyboardButton('Cʟ6sᴇ ✖️', callback_data='close')]
+                [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Set Timer ⏱', callback_data='set_timer')],
+                [InlineKeyboardButton('🔄 Refresh', callback_data='autodel_cmd'), InlineKeyboardButton('Close ✖️', callback_data='close')]
             ])
         )
     except Exception as e:
-        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Cʟ6sᴇ ✖️", callback_data="close")]])
-        await message.reply(f"<b>! Eʀʀ6ʀ Oᴄᴄᴜʀᴇᴅ..\n<blockquote>Rᴇ6s6ɴ:</b> {e}</blockquote>", reply_markup=reply_markup)
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Close ✖️", callback_data="close")]])
+        await message.reply(f"<b>! Error Occurred..\n<blockquote>Reason:</b> {e}</blockquote>", reply_markup=reply_markup)
 
 
 # ==================== 4. CALLBACK PANEL INTERFACES ====================
@@ -137,21 +128,21 @@ async def autodel_callbacks(client: Client, query: CallbackQuery):
     if user_id != int(OWNER_ID):
         return await query.answer("⚠️ Only the Bot Owner can change configuration variables!", show_alert=True)
         
-    await query.answer("♻️ Pʀ6ᴄᴇssɪɴɢ....")
+    await query.answer("♻️ Processing....")
     timer_seconds = await obito.get_del_timer()
     timer_readable = convert_time(timer_seconds)
 
     if data == 'autodel_cmd':
         is_enabled = await obito.get_auto_delete()
         autodel_mode = on_txt if is_enabled else off_txt
-        mode = 'Dɪs6ʙʟᴇ M6ᴅᴇ ❌' if is_enabled else 'Eɴ6ʙʟᴇ M6ᴅᴇ ✅'
+        mode = 'Disable Mode ❌' if is_enabled else 'Enable Mode ✅'
         
         try:
             await query.edit_message_caption(
                 caption=AUTODEL_CMD_TXT.format(autodel_mode=autodel_mode, timer=timer_readable),
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Sᴇᴛ Tɪᴍᴇʀ ⏱', callback_data='set_timer')],
-                    [InlineKeyboardButton('🔄 Rᴇғʀᴇsʜ', callback_data='autodel_cmd'), InlineKeyboardButton('Cʟ6sᴇ ✖️', callback_data='close')]
+                    [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Set Timer ⏱', callback_data='set_timer')],
+                    [InlineKeyboardButton('🔄 Refresh', callback_data='autodel_cmd'), InlineKeyboardButton('Close ✖️', callback_data='close')]
                 ])
             )
         except Exception:
@@ -160,14 +151,14 @@ async def autodel_callbacks(client: Client, query: CallbackQuery):
     elif data == 'chng_autodel':
         new_state = await obito.toggle_auto_delete()
         autodel_mode = on_txt if new_state else off_txt
-        mode = 'Dɪs6ʙʟᴇ M6ᴅᴇ ❌' if new_state else 'Eɴ6ʙʟᴇ M6ᴅᴇ ✅'
+        mode = 'Disable Mode ❌' if new_state else 'Enable Mode ✅'
         
         try:
             await query.edit_message_caption(
                 caption=AUTODEL_CMD_TXT.format(autodel_mode=autodel_mode, timer=timer_readable),
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Sᴇᴛ Tɪᴍᴇʀ ⏱', callback_data='set_timer')],
-                    [InlineKeyboardButton('🔄 Rᴇғʀᴇsʜ', callback_data='autodel_cmd'), InlineKeyboardButton('Cʟ6sᴇ ✖️', callback_data='close')]
+                    [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Set Timer ⏱', callback_data='set_timer')],
+                    [InlineKeyboardButton('🔄 Refresh', callback_data='autodel_cmd'), InlineKeyboardButton('Close ✖️', callback_data='close')]
                 ])
             )
         except Exception:
@@ -179,22 +170,26 @@ async def autodel_callbacks(client: Client, query: CallbackQuery):
         
         await client.send_message(
             chat_id=user_id,
-            text=f"<b><blockquote>⏱ Cᴜʀʀᴇɴᴛ Tɪᴍᴇʀ: {timer_readable}</blockquote>\n\n"
-                 "To change timer, please send valid number in seconds.\n"
+            text=f"<b><blockquote>⏱ Current Timer: {timer_readable}</blockquote>\n\n"
+                 "To change timer, please send a valid number in seconds.\n"
                  "<blockquote>Example: <code>300</code> (5m), <code>600</code> (10m), <code>3600</code> (1h)</blockquote></b>",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="autodel_cmd")]])
         )
 
 
-# ==================== 5. TEXT INTERCEPTOR FOR TIMER INPUT (SAFE) ====================
-# Isme group=2 set kiya hai aur saari commands ko ignore list mein dala hai taaki baki commands block na hon
-@Client.on_message(filters.private & filters.text & ~filters.command(AUTODEL_IGNORE_COMMANDS), group=2)
+# ==================== 5. TEXT INTERCEPTOR FOR TIMER INPUT (ULTRA SAFE) ====================
+
+# Dynamic filter callback logic checking state parameters entry points instantly
+async def check_active_autodel_state(_, __, message: Message):
+    if not message.from_user:
+        return False
+    return message.from_user.id in AUTODEL_STATE
+
+@Client.on_message(filters.private & filters.text & filters.create(check_active_autodel_state), group=1)
 async def process_raw_timer_text(client: Client, message: Message):
     user_id = message.from_user.id
     
-    if user_id not in AUTODEL_STATE:
-        return # Agar timer setup state active nahi hai toh chupchaap skip kar do baki commands ke liye
-        
+    # Pop out state instantly to prevent message leakage
     AUTODEL_STATE.pop(user_id, None)
     input_text = message.text.strip()
     
@@ -212,13 +207,13 @@ async def process_raw_timer_text(client: Client, message: Message):
     timer_readable = convert_time(seconds_val)
     is_enabled = await obito.get_auto_delete()
     autodel_mode = on_txt if is_enabled else off_txt
-    mode = 'Dɪs6ʙʟᴇ M6ᴅᴇ ❌' if is_enabled else 'Eɴ6ʙʟᴇ M6ᴅᴇ ✅'
+    mode = 'Disable Mode ❌' if is_enabled else 'Enable Mode ✅'
     
     await message.reply_text(
         f"<b>Added Successfully ✅\n<blockquote>⏱ Current Timer Updated: {timer_readable}</blockquote></b>",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Sᴇᴛ Tɪᴍᴇʀ ⏱', callback_data='set_timer')],
+            [InlineKeyboardButton(mode, callback_data='chng_autodel'), InlineKeyboardButton('◈ Set Timer ⏱', callback_data='set_timer')],
             [InlineKeyboardButton('🔄 Dashboard Panel', callback_data='autodel_cmd')]
         ])
     )
-    message.stop_propagation() # Sirf jab state active ho tabhi message interceptor break hoga
+    message.stop_propagation() # Breaks downstream operations ONLY when capturing input state configs
