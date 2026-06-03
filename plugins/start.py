@@ -29,10 +29,14 @@ async def auto_del_notification(client, msg, delay_time):
             readable_time = convert_time(delay_time)
             reply = await msg.reply_text(DEL_MSG.format(time=readable_time), disable_web_page_preview=True) 
             await asyncio.sleep(delay_time)
-            try: await reply.delete()
-            except Exception: pass
-            try: await msg.delete()
-            except Exception: pass
+            try:
+                await reply.delete()
+            except Exception:
+                pass
+            try:
+                await msg.delete()
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -140,9 +144,9 @@ async def start_command(client: Client, message: Message):
         return
     else:
         reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("ʜᴇʟᴘ", callback_data='help'),
-             InlineKeyboardButton("ᴀʙᴏᴜᴛ", callback_data='about')],
-            [InlineKeyboardButton("ᴄʟ6ѕᴇ ✖️", callback_data='close')]
+            [InlineKeyboardButton("Help", callback_data='help'),
+             InlineKeyboardButton("About", callback_data='about')],
+            [InlineKeyboardButton("Close ✖️", callback_data='close')]
         ])
         try:
             await message.reply_photo(
@@ -198,7 +202,7 @@ async def not_joined(client: Client, message: Message):
         try:
             chat_info = await client.get_chat(ch_id)
             invite_link = chat_info.invite_link or f"https://t.me/AnimeInHindi094"
-            temp_row.append(InlineKeyboardButton(text=f"ᴄʜᴀɴɴᴇʟ {idx}", url=invite_link))
+            temp_row.append(InlineKeyboardButton(text=f"Channel {idx}", url=invite_link))
             if len(temp_row) == 2:
                 buttons.append(temp_row)
                 temp_row = []
@@ -210,9 +214,10 @@ async def not_joined(client: Client, message: Message):
 
     try:
         start_param = message.text.split(" ", 1)[1]
-        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start={start_param}")])
+        buttons.append([InlineKeyboardButton(text='Try Again 🔄', url=f"https://t.me/{client.me.username}?start={start_param}")])
     except IndexError:
-        buttons.append([InlineKeyboardButton(text='ᴛʀʏ ᴀɢᴀɪɴ', url=f"https://t.me/{client.me.username}?start={true}")])
+        # FIXED: Changed lowercase {true} variable into a valid "True" python payload string to resolve crashes
+        buttons.append([InlineKeyboardButton(text='Try Again 🔄', url=f"https://t.me/{client.me.username}?start=True")])
 
     await message.reply_photo(
         photo=FORCE_PIC,
@@ -358,9 +363,9 @@ async def advanced_broadcast_handler(client: Client, message: Message):
         total += 1
         await asyncio.sleep(0.05)
     
-    status = f"""<b>📢 <u>ʙʀᴏ6ᴅᴄ6ꜱᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ!</u></b>
+    status = f"""<b>📢 <u>BROADCAST COMPLETED!</u></b>
 
-<blockquote>📊 <b>Sᴛ6ᴛs Rᴇᴘ6ʀᴛ:</b></blockquote>
+<blockquote>📊 <b>Stats Report:</b></blockquote>
 • <b>Total Users DB:</b> <code>{total}</code>
 • <b>Successful:</b> <code>{successful}</code>
 • <b>Blocked Users Wiped:</b> <code>{blocked}</code>
@@ -371,4 +376,4 @@ async def advanced_broadcast_handler(client: Client, message: Message):
 ⏱ <b>Task Lifespan:</b> <code>{timer_readable}</code>
 """
     return await pls_wait.edit(status)
-                                             
+        
