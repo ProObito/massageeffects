@@ -71,7 +71,7 @@ async def remove_premium_command(client: Client, message: Message):
         await obito.remove_premium(user_id)
         await message.reply(f"⛔️ User {user_name} (`{user_id}`) has been removed from premium users.")
         try:
-            await client.send_message(user_id, "Your Premium membership has been ended. Contact admins to renew here - @Its_Wriotheslay")
+            await client.send_message(user_id, "Your Premium membership has been ended. Contact admins to renew here - @Its_Lozo")
         except Exception as e:
             await message.reply(f"Failed to notify the user: {e}")
     else:
@@ -150,6 +150,6 @@ async def my_plan_command(client: Client, message: Message):
         await message.reply_text(
             f"<b>✨ Premium State: Active ✅</b>\n\n"
             f"👤 <b>User:</b> {message.from_user.mention}\n"
-            f"ℹ️ Detailed tracking timeline values not found in records, please contact support team admin."
+            f"ℹ️ Detailed tracking timeline values not found in records, please contact support team admin. @Its_Lozo"
         )
         
