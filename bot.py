@@ -68,7 +68,7 @@ class Bot(Client):
             sys.exit()
 
         self.set_parse_mode(ParseMode.HTML)
-        self.LOGGER(__name__).info("Bot Running..! Created by @AnimeInHindi094")
+        self.LOGGER(__name__).info("Bot Running..! Created by @i_killed_my_clan")
         
         # ==================== STARTUP NOTIFICATION FOR OWNER ====================
         try:
