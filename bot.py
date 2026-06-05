@@ -4,6 +4,7 @@ from plugins import web_server
 import pyromod.listen
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton  # FIXED: Missing layout imports added
 import sys
 import asyncio
 from datetime import datetime
@@ -28,8 +29,9 @@ class Bot(Client):
         )
         self.LOGGER = LOGGER
 
-    async def start(self):
-        await super().start()
+    # FIXED: Added *args and **kwargs to accept internal Pyrogram runner framework parameters safely
+    async def start(self, *args, **kwargs):
+        await super().start(*args, **kwargs)
         usr_bot_me = await self.get_me()
         self.uptime = datetime.now()
         self.username = usr_bot_me.username
