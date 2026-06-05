@@ -1,3 +1,5 @@
+# +++ Made By Obito [@i_killed_my_clan] +++
+
 import random
 import string
 import asyncio
@@ -6,6 +8,7 @@ import requests
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
+from bot import Bot
 from config import SHORT_API, SHORT_URL
 from database.database import obito
 from helper_func import is_admin
@@ -68,7 +71,7 @@ async def get_shortener_keyboard():
         f"🛠 <b>Sʜ6ʀᴛᴇɴᴇʀ C6ɴғɪɢᴜʀ6ᴛɪ6ɴ P6ɴᴇʟ</b>\n\n"
         f"🔗 <b>Global URL:</b> <code>{url}</code>\n"
         f"⚙️ <b>Moᴅᴇ:</b> <code>{mode}</code>\n\n"
-        f"💬 <b>5-Sʟᴏᴛ Rᴏᴛᴀᴛɪᴏɴ Sᴛ6ᴛᴜs:</b>\n"
+        f"💬 <b>5-Sʟᴏᴛ Rᴏᴛ6ᴛɪ6ɴ Sᴛ6ᴛᴜs:</b>\n"
     )
     
     buttons = [
@@ -78,7 +81,6 @@ async def get_shortener_keyboard():
         ]
     ]
     
-    # 5-Slot visual dynamic loop printing parameters mapping sequentially
     for i in range(1, 6):
         data = await obito.get_slot_settings(i)
         slot_status = f"<code>{data.get('url')}</code>" if data.get('url') else "<i>Not Set ❌</i>"
@@ -95,12 +97,14 @@ async def get_shortener_keyboard():
     buttons.append([InlineKeyboardButton("✖️ Close", callback_data="close")])
     return text, InlineKeyboardMarkup(buttons)
 
-@Client.on_message(filters.command('shorten') & filters.private & is_admin)
+# FIXED: Shifted from Client to Bot registry structure
+@Bot.on_message(filters.command('shorten') & filters.private & is_admin)
 async def shorten_dashboard_cmd(client: Client, message: Message):
     text, reply_markup = await get_shortener_keyboard()
     await message.reply_text(text, reply_markup=reply_markup)
 
-@Client.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_|manage_slot_|wipe_slot_|abort_setup)"))
+# FIXED: Connected callback handling route strictly via Bot framework query filters
+@Bot.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_|manage_slot_|wipe_slot_|abort_setup)"))
 async def shortener_callback_handler(client: Client, callback_query: CallbackQuery):
     data = callback_query.data
     user_id = callback_query.from_user.id
@@ -158,7 +162,8 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="abort_setup")]])
         )
 
-@Client.on_callback_query(filters.regex("cancel_short"))
+# FIXED: Integrated callback tracker framework inside the central engine cluster configuration
+@Bot.on_callback_query(filters.regex("cancel_short"))
 async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     SHORTENER_STATE.pop(user_id, None)
@@ -166,13 +171,13 @@ async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     text, markup = await get_shortener_keyboard()
     await callback_query.message.edit_text(text, reply_markup=markup)
 
-# High priority interceptor for Multi-Slot interactive data configurations parameters tracking
+# High priority interceptor for Multi-Slot configuration loops
 async def check_active_shorten_state(_, __, message: Message):
     if not message.from_user:
         return False
     return message.from_user.id in ADMIN_SETUP_STATE
 
-@Client.on_message(filters.private & filters.text & filters.create(check_active_shorten_state), group=-2)
+@Bot.on_message(filters.private & filters.text & filters.create(check_active_shorten_state), group=-2)
 async def process_shortener_input_steps(client: Client, message: Message):
     user_id = message.from_user.id
     input_text = message.text.strip()
@@ -211,14 +216,13 @@ async def process_shortener_input_steps(client: Client, message: Message):
         
         text, markup = await get_shortener_keyboard()
         await message.reply_text(
-            f"✅ <b>Slot {slot_id} successfully linked and updated into rotation routing records!</b>",
+            f"✅ <b>Slot {slot_id} successfully linked and updated into rotation records!</b>",
             reply_markup=markup
         )
         message.stop_propagation()
         return
 
-# High priority interceptor (group=-1) taaki channel_post se pehle trigger ho
-@Client.on_message(filters.private & filters.text & ~filters.command([]), group=-1)
+@Bot.on_message(filters.private & filters.text & ~filters.command([]), group=-1)
 async def capture_shortener_input(client: Client, message: Message):
     user_id = message.from_user.id
     
@@ -250,4 +254,4 @@ async def capture_shortener_input(client: Client, message: Message):
         await message.reply_text(f"❌ <b>Internal Error:</b> <code>{e}</code>")
         
     message.stop_propagation()
-    
+                                
