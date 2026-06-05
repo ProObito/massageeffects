@@ -12,6 +12,7 @@ from helper_func import is_admin
 
 # State tracker dictionary
 SHORTENER_STATE = {}
+ADMIN_SETUP_STATE = {}
 
 def generate_random_alphanumeric():
     characters = string.ascii_letters + string.digits
@@ -29,14 +30,22 @@ def get_short(url):
         return url
 
 async def get_dynamic_short_url(long_url: str) -> str:
-    settings = await obito.get_shortener_settings()
-    url = settings.get('url')
-    api = settings.get('api')
-    
-    if not url or not api:
-        return get_short(long_url)
+    slots_active = []
+    for i in range(1, 6):
+        data = await obito.get_slot_settings(i)
+        if data.get('url') and data.get('api'):
+            slots_active.append(data)
+            
+    if not slots_active:
+        settings = await obito.get_shortener_settings()
+        url = settings.get('url')
+        api = settings.get('api')
+        if not url or not api:
+            return get_short(long_url)
+        slots_active.append({'url': url, 'api': api})
         
-    api_endpoint = f"https://{url}/api?api={api}&url={long_url}"
+    node = slots_active[0]
+    api_endpoint = f"https://{node['url']}/api?api={node['api']}&url={long_url}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_endpoint) as response:
@@ -57,23 +66,33 @@ async def get_shortener_keyboard():
     
     text = (
         f"🛠 <b>Sʜ6ʀᴛᴇɴᴇʀ C6ɴғɪɢᴜʀ6ᴛɪ6ɴ P6ɴᴇʟ</b>\n\n"
-        f"🔗 <b>URL:</b> <code>{url}</code>\n"
+        f"🔗 <b>Global URL:</b> <code>{url}</code>\n"
         f"⚙️ <b>Moᴅᴇ:</b> <code>{mode}</code>\n\n"
-        f"<blockquote>💡 <i>Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h keys.</i></blockquote>"
+        f"💬 <b>5-Sʟᴏᴛ Rᴏᴛᴀᴛɪᴏɴ Sᴛ6ᴛᴜs:</b>\n"
     )
     
     buttons = [
         [
             InlineKeyboardButton("➕ Add / Change ", callback_data="set_short"),
             InlineKeyboardButton("🗑 Remove ", callback_data="del_short")
-        ],
-        [
-            InlineKeyboardButton(f"🔄 Mode: {mode}", callback_data=f"toggle_mode_{mode.replace(' ', '_')}")
-        ],
-        [
-            InlineKeyboardButton("✖️ Close", callback_data="close")
         ]
     ]
+    
+    # 5-Slot visual dynamic loop printing parameters mapping sequentially
+    for i in range(1, 6):
+        data = await obito.get_slot_settings(i)
+        slot_status = f"<code>{data.get('url')}</code>" if data.get('url') else "<i>Not Set ❌</i>"
+        text += f"▫️ <b>Slot {i}:</b> {slot_status}\n"
+        
+        buttons.append([
+            InlineKeyboardButton(f"⚙️ Config Slot {i}", callback_data=f"manage_slot_{i}"),
+            InlineKeyboardButton(f"🗑 Wipe {i}", callback_data=f"wipe_slot_{i}")
+        ])
+        
+    text += f"\n<blockquote>💡 Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h keys. Users rotate smoothly from Slot 1 to 5.</blockquote>"
+    
+    buttons.append([InlineKeyboardButton(f"🔄 Mode: {mode}", callback_data=f"toggle_mode_{mode.replace(' ', '_')}")])
+    buttons.append([InlineKeyboardButton("✖️ Close", callback_data="close")])
     return text, InlineKeyboardMarkup(buttons)
 
 @Client.on_message(filters.command('shorten') & filters.private & is_admin)
@@ -81,7 +100,7 @@ async def shorten_dashboard_cmd(client: Client, message: Message):
     text, reply_markup = await get_shortener_keyboard()
     await message.reply_text(text, reply_markup=reply_markup)
 
-@Client.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_)"))
+@Client.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_|manage_slot_|wipe_slot_|abort_setup)"))
 async def shortener_callback_handler(client: Client, callback_query: CallbackQuery):
     data = callback_query.data
     user_id = callback_query.from_user.id
@@ -113,6 +132,32 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
         )
         await callback_query.answer()
 
+    elif data == "abort_setup":
+        ADMIN_SETUP_STATE.pop(user_id, None)
+        await callback_query.answer("❌ Slot Setup Cancelled!")
+        text, markup = await get_shortener_keyboard()
+        return await callback_query.message.edit_text(text, reply_markup=markup)
+
+    elif data.startswith("wipe_slot_"):
+        slot_id = int(data.split("wipe_slot_")[1])
+        await obito.remove_slot_settings(slot_id)
+        await callback_query.answer(f"🗑 Slot {slot_id} data cleared!", show_alert=True)
+        text, markup = await get_shortener_keyboard()
+        return await callback_query.message.edit_text(text, reply_markup=markup)
+
+    elif data.startswith("manage_slot_"):
+        slot_id = int(data.split("manage_slot_")[1])
+        ADMIN_SETUP_STATE[user_id] = {"slot": slot_id, "step": "url"}
+        await callback_query.answer("⚙️ Starting Slot Configuration...")
+        
+        await callback_query.message.edit_text(
+            text=f"📥 <b>[Slot {slot_id} Configuration] - Step 1:</b>\n\n"
+                 f"Please send the shortener <b>Domain URL</b> now.\n\n"
+                 f"ℹ️ <i>Example: <code>gplinks.co</code> or <code>droplink.co</code></i>\n\n"
+                 f"💬 <i>Send /cancel to terminate this process anytime.</i>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="abort_setup")]])
+        )
+
 @Client.on_callback_query(filters.regex("cancel_short"))
 async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -120,6 +165,57 @@ async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("Process Cancelled ✖️")
     text, markup = await get_shortener_keyboard()
     await callback_query.message.edit_text(text, reply_markup=markup)
+
+# High priority interceptor for Multi-Slot interactive data configurations parameters tracking
+async def check_active_shorten_state(_, __, message: Message):
+    if not message.from_user:
+        return False
+    return message.from_user.id in ADMIN_SETUP_STATE
+
+@Client.on_message(filters.private & filters.text & filters.create(check_active_shorten_state), group=-2)
+async def process_shortener_input_steps(client: Client, message: Message):
+    user_id = message.from_user.id
+    input_text = message.text.strip()
+    
+    session = ADMIN_SETUP_STATE[user_id]
+    slot_id = session["slot"]
+    step = session["step"]
+    
+    if input_text.lower() == "/cancel":
+        ADMIN_SETUP_STATE.pop(user_id, None)
+        text, markup = await get_shortener_keyboard()
+        await message.reply_text("✅ Setup canceled. Returned to dashboard panel.", reply_markup=markup)
+        message.stop_propagation()
+        return
+
+    if step == "url":
+        clean_url = input_text.replace("https://", "").replace("http://", "").strip("/")
+        ADMIN_SETUP_STATE[user_id]["url"] = clean_url
+        ADMIN_SETUP_STATE[user_id]["step"] = "api"
+        
+        await message.reply_text(
+            f"📥 <b>[Slot {slot_id} Configuration] - Step 2:</b>\n\n"
+            f"Domain recorded: <code>{clean_url}</code>\n"
+            f"Now please send the corresponding <b>API Key token</b> string for this slot platform.\n\n"
+            f"💬 <i>Send /cancel to terminate this process anytime.</i>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="abort_setup")]])
+        )
+        message.stop_propagation()
+        return
+        
+    elif step == "api":
+        saved_url = session["url"]
+        ADMIN_SETUP_STATE.pop(user_id, None)
+        
+        await obito.update_slot_settings(slot_id, saved_url, input_text)
+        
+        text, markup = await get_shortener_keyboard()
+        await message.reply_text(
+            f"✅ <b>Slot {slot_id} successfully linked and updated into rotation routing records!</b>",
+            reply_markup=markup
+        )
+        message.stop_propagation()
+        return
 
 # High priority interceptor (group=-1) taaki channel_post se pehle trigger ho
 @Client.on_message(filters.private & filters.text & ~filters.command([]), group=-1)
@@ -137,7 +233,7 @@ async def capture_shortener_input(client: Client, message: Message):
             "Run <code>/shorten</code> again to configure.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Restart Dashboard", callback_data="cancel_short")]])
         )
-        message.stop_propagation() # Yahin rok do, link_post par nahi jayega
+        message.stop_propagation()
         return
     
     try:
@@ -153,4 +249,5 @@ async def capture_shortener_input(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"❌ <b>Internal Error:</b> <code>{e}</code>")
         
-    message.stop_propagation() 
+    message.stop_propagation()
+    
