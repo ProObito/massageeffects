@@ -94,12 +94,10 @@ class Bot(Client):
 
 
 # ==================== DYNAMIC /COMMANDS LIST REGISTRY ====================
-
-@Client.on_message(filters.command(['commands', 'help_cmd']) & filters.private & ~is_banned)
-async def bot_commands_dictionary_list(client: Bot, message):
+@Bot.on_message(filters.command(['cmds', 'help_cmd']) & filters.private & ~is_banned)
+async def bot_commands_dictionary_list(bot: Bot, message):  # FIXED: Changed parameter variable reference to 'bot'
     user_id = message.from_user.id
     
-    # Base user commands menu template layout
     commands_text = (
         "📜 <b>🤖 BOT COMMANDS DICTIONARY PANEL</b>\n\n"
         "✨ <b>👤 USER COMMANDS:</b>\n"
@@ -108,11 +106,13 @@ async def bot_commands_dictionary_list(client: Bot, message):
         "• <code>/request</code> - Submit a direct movie or series request privately to the admin team.\n\n"
     )
     
-    # Validate privileges to render privileged commands menu sections
-    if await is_admin(None, client, message):
+    if await is_admin(None, bot, message):  # FIXED: Updated context reference variable mapping to 'bot'
         commands_text += (
             "⚙️ <b>🛠 ADMIN CONTROL COMMANDS:</b>\n"
-            "• <code>/shorten</code> - Open the inline panel to dynamically configure or remove url shorteners.\n"
+            "• <code>/shorten</code> - Open the inline panel to configure or remove url shorteners.\n"
+            "• <code>/checkslots</code> - Check status of all 5 shortener sequential slots.\n"
+            "• <code>/setslot [1-5] domain | api</code> - Quick shortcut command to set dynamic slots.\n"
+            "• <code>/wipeslot [1-5]</code> - Text command to wipe out a specific slot configuration.\n"
             "• <code>/auto_del</code> - Adjust configuration variables for message deletion timers and modes.\n"
             "• <code>/fsub_chnl</code> - View the complete registry of active dynamic multi-fsub channels.\n"
             "• <code>/add_banuser [id]</code> - Blacklist a specific user and permanently restrict bot access.\n"
@@ -137,3 +137,5 @@ async def bot_commands_dictionary_list(client: Bot, message):
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Close Menu", callback_data="close")]])
     )
     
+    # CRITICAL FIX: Stops down-stream file handlers from capturing this command execution and sending hardcoded alert popups
+    message.stop_propagation()
