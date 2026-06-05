@@ -9,13 +9,14 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from bot import Bot
-from config import SHORT_API, SHORT_URL
+from config import SHORT_API, SHORT_URL, OWNER_ID
 from database.database import obito
-from helper_func import is_admin
+from helper_func import is_admin, is_banned
 
-# State tracker dictionary
-SHORTENER_STATE = {}
+# Master Control States System
 ADMIN_SETUP_STATE = {}
+
+# ==================== 1. LEGACY UTILITIES ====================
 
 def generate_random_alphanumeric():
     characters = string.ascii_letters + string.digits
@@ -71,13 +72,13 @@ async def get_shortener_keyboard():
         f"🛠 <b>Sʜ6ʀᴛᴇɴᴇʀ C6ɴғɪɢᴜʀ6ᴛɪ6ɴ P6ɴᴇʟ</b>\n\n"
         f"🔗 <b>Global URL:</b> <code>{url}</code>\n"
         f"⚙️ <b>Moᴅᴇ:</b> <code>{mode}</code>\n\n"
-        f"💬 <b>5-Sʟᴏᴛ Rᴏᴛ6ᴛɪ6ɴ Sᴛ6ᴛᴜs:</b>\n"
+        f"💬 <b>5-Sʟ6ᴛ R6ᴛ6ᴛɪ6ɴ Sᴛ6ᴛᴜs:</b>\n"
     )
     
     buttons = [
         [
-            InlineKeyboardButton("➕ Add / Change ", callback_data="set_short"),
-            InlineKeyboardButton("🗑 Remove ", callback_data="del_short")
+            InlineKeyboardButton("➕ Add / Change Global", callback_data="set_short"),
+            InlineKeyboardButton("🗑 Remove Global", callback_data="del_short")
         ]
     ]
     
@@ -91,19 +92,68 @@ async def get_shortener_keyboard():
             InlineKeyboardButton(f"🗑 Wipe {i}", callback_data=f"wipe_slot_{i}")
         ])
         
-    text += f"\n<blockquote>💡 Tip: 1-Time Mode transfers users instantly, Token Mode gives 24h keys. Users rotate smoothly from Slot 1 to 5.</blockquote>"
+    text += f"\n⚙️ <b>BACKUP TEXT COMMANDS:</b>\n" \
+            f"• <code>/setslot [1-5] domain | api</code>\n" \
+            f"• <code>/wipeslot [1-5]</code>\n" \
+            f"• <code>/checkslots</code>\n\n" \
+            f"<blockquote>💡 Tip: Users rotate smoothly from Slot 1 to 5 dynamically.</blockquote>"
     
     buttons.append([InlineKeyboardButton(f"🔄 Mode: {mode}", callback_data=f"toggle_mode_{mode.replace(' ', '_')}")])
-    buttons.append([InlineKeyboardButton("✖️ Close", callback_data="close")])
+    buttons.append([InlineKeyboardButton("✖️ Close Menu", callback_data="close")])
     return text, InlineKeyboardMarkup(buttons)
 
-# FIXED: Shifted from Client to Bot registry structure
+# ==================== 2. TEXT SHORTCUT COMMAND HANDLERS ====================
+
 @Bot.on_message(filters.command('shorten') & filters.private & is_admin)
 async def shorten_dashboard_cmd(client: Client, message: Message):
     text, reply_markup = await get_shortener_keyboard()
     await message.reply_text(text, reply_markup=reply_markup)
 
-# FIXED: Connected callback handling route strictly via Bot framework query filters
+@Bot.on_message(filters.command('checkslots') & filters.private & is_admin)
+async def check_slots_text_cmd(client: Client, message: Message):
+    text, _ = await get_shortener_keyboard()
+    await message.reply_text(text)
+
+@Bot.on_message(filters.command('wipeslot') & filters.private & is_admin)
+async def wipeslot_text_cmd(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply_text("❌ <b>Usage:</b> <code>/wipeslot [1-5]</code>")
+    
+    slot_str = message.command[1]
+    if not slot_str.isdigit() or not (1 <= int(slot_str) <= 5):
+        return await message.reply_text("❌ <b>Error:</b> Slot number must be between 1 and 5.")
+        
+    slot_id = int(slot_str)
+    await obito.remove_slot_settings(slot_id)
+    await message.reply_text(f"✅ <b>Slot {slot_id} data completely wiped out!</b>")
+
+@Bot.on_message(filters.command('setslot') & filters.private & is_admin)
+async def setslot_text_cmd(client: Client, message: Message):
+    if len(message.command) < 3:
+        return await message.reply_text("❌ <b>Usage:</b> <code>/setslot [1-5] shortener_domain.com | api_key_here</code>")
+        
+    slot_str = message.command[1]
+    if not slot_str.isdigit() or not (1 <= int(slot_str) <= 5):
+        return await message.reply_text("❌ <b>Error:</b> Slot number must be between 1 and 5.")
+        
+    slot_id = int(slot_str)
+    raw_payload = " ".join(message.command[2:])
+    
+    if " | " not in raw_payload:
+        return await message.reply_text("❌ <b>Invalid format!</b> Use <code>|</code> divider to separate domain and api key.")
+        
+    try:
+        url_part, api_part = raw_payload.split(" | ", 1)
+        url_clean = url_part.strip().replace("https://", "").replace("http://", "").strip("/")
+        api_clean = api_part.strip()
+        
+        await obito.update_slot_settings(slot_id, url_clean, api_clean)
+        await message.reply_text(f"✅ <b>Slot {slot_id} configured successfully!</b>\n\n🌐 <b>Domain:</b> <code>{url_clean}</code>")
+    except Exception as e:
+        await message.reply_text(f"❌ <b>Error processing variables:</b> <code>{e}</code>")
+
+# ==================== 3. COMPLETE INTERACTIVE CALLBACKS ====================
+
 @Bot.on_callback_query(filters.regex(r"^(set_short|del_short|toggle_mode_|manage_slot_|wipe_slot_|abort_setup)"))
 async def shortener_callback_handler(client: Client, callback_query: CallbackQuery):
     data = callback_query.data
@@ -162,7 +212,6 @@ async def shortener_callback_handler(client: Client, callback_query: CallbackQue
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Cancel Process", callback_data="abort_setup")]])
         )
 
-# FIXED: Integrated callback tracker framework inside the central engine cluster configuration
 @Bot.on_callback_query(filters.regex("cancel_short"))
 async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -171,7 +220,8 @@ async def cancel_shortener_state(client: Client, callback_query: CallbackQuery):
     text, markup = await get_shortener_keyboard()
     await callback_query.message.edit_text(text, reply_markup=markup)
 
-# High priority interceptor for Multi-Slot configuration loops
+# ==================== 4. STEP-BY-STEP INPUT TEXT INTERCEPTORS ====================
+
 async def check_active_shorten_state(_, __, message: Message):
     if not message.from_user:
         return False
@@ -254,4 +304,4 @@ async def capture_shortener_input(client: Client, message: Message):
         await message.reply_text(f"❌ <b>Internal Error:</b> <code>{e}</code>")
         
     message.stop_propagation()
-                                
+        
