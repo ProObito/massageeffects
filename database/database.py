@@ -16,6 +16,8 @@ banned_col = database['banned_users']
 orders_col = database['payment_orders']
 shortener_col = database['shortener_settings']
 autodel_col = database['autodel_settings']
+slots_col = database['shorten_slots']
+user_cycle_col = database['user_cycles']
 
 class ObitoDB:
     def __init__(self):
@@ -166,7 +168,44 @@ class ObitoDB:
         )
         return new_mode
 
-    # ==================== 8. ON-BOT AUTO DELETE SETTINGS ====================
+    # ==================== 8. 5-SLOT SHORTENER ROTATION ENGINE ====================
+    async def get_slot_settings(self, slot_id: int):
+        doc = await slots_col.find_one({'_id': f'slot_{slot_id}'})
+        if not doc:
+            return {'url': None, 'api': None}
+        return doc
+
+    async def update_slot_settings(self, slot_id: int, url: str, api: str):
+        await slots_col.update_one(
+            {'_id': f'slot_{slot_id}'},
+            {'$set': {'url': url, 'api': api}},
+            upsert=True
+        )
+
+    async def remove_slot_settings(self, slot_id: int):
+        await slots_col.update_one(
+            {'_id': f'slot_{slot_id}'},
+            {'$set': {'url': None, 'api': None}},
+            upsert=True
+        )
+
+    async def get_user_cycle_index(self, user_id: int):
+        doc = await user_cycle_col.find_one({'_id': user_id})
+        if not doc:
+            return 1  # Loops begin at Slot 1 by default
+        return doc.get('current_slot', 1)
+
+    async def advance_user_cycle(self, user_id: int):
+        current = await self.get_user_cycle_index(user_id)
+        next_slot = 1 if current >= 5 else current + 1
+        await user_cycle_col.update_one(
+            {'_id': user_id},
+            {'$set': {'current_slot': next_slot}},
+            upsert=True
+        )
+        return next_slot
+
+    # ==================== 9. ON-BOT AUTO DELETE SETTINGS ====================
     async def get_del_timer(self):
         settings = await autodel_col.find_one({'_id': 'autodel'})
         if not settings:
@@ -197,7 +236,6 @@ class ObitoDB:
         return new_state
 
 
-# ==================== EXPORT INSTANCE (CLASS KE BAHAR) ====================
-# Pure bot files mein access karne ke liye mapping object
+# ==================== EXPORT INSTANCE (OUTSIDE CLASS) ====================
+# Global variable tracking token to interact seamlessly across bot plugins
 obito = ObitoDB()
-        
