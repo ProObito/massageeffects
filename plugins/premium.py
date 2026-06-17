@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from bot import Bot
 from database.database import obito  # Uses your centralized obito database module instance
 from helper_func import is_admin, is_banned
 
@@ -14,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 # ==================== 1. BACKGROUND SCHEDULERS & MONITORS ====================
 
-async def auto_premium_monitor_loop(bot: Bot):
+async def auto_premium_monitor_loop(bot):
     """
     Background loop running every 5 minutes to automatically expire old subscriptions
     and send professional English expiration notices.
     """
+    # FIXED: Local import inside function to break circular dependencies
+    from bot import Bot
+    
     while True:
         try:
             now = datetime.now()
@@ -70,11 +72,14 @@ async def auto_premium_monitor_loop(bot: Bot):
         await asyncio.sleep(300)  # Evaluation run sweep routine interval defaults to 5 minutes
 
 
-async def premium_expiry_reminder_scheduler(bot: Bot):
+async def premium_expiry_reminder_scheduler(bot):
     """
     Hourly cron background scheduler checking for profiles expiring within the next 23-24 hour window
     to distribute critical warning notice messages.
     """
+    # FIXED: Local import inside function to break circular dependencies
+    from bot import Bot
+    
     while True:
         try:
             now = datetime.now()
@@ -122,7 +127,7 @@ async def premium_expiry_reminder_scheduler(bot: Bot):
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
 
 @Bot.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin)
-async def add_premium_user_cmd(bot: Bot, message: Message):
+async def add_premium_user_cmd(bot, message: Message):
     if len(message.command) < 3:
         return await message.reply_text(
             "❌ <b>Usage Format Error!</b>\n\n"
@@ -152,13 +157,13 @@ async def add_premium_user_cmd(bot: Bot, message: Message):
             chat_id=target_user_id,
             text=f"🎉 <b>Congratulations!</b>\n\n"
                  f"Your account has been upgraded to the <b>Premium Ad-Free Tier</b> for the next <code>{duration_days} Days</code>.\n"
-                 f"Enjoy high-speed ads free file downloads!"
+                 f"Enjoy high-speed bypass-free file downloads!"
         )
     except Exception:
         pass
 
 @Bot.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin)
-async def remove_premium_user_cmd(bot: Bot, message: Message):
+async def remove_premium_user_cmd(bot, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>")
         
@@ -183,7 +188,7 @@ async def remove_premium_user_cmd(bot: Bot, message: Message):
         pass
 
 @Bot.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin)
-async def list_premium_users_cmd(bot: Bot, message: Message):
+async def list_premium_users_cmd(bot, message: Message):
     loading_msg = await message.reply_text("🔍 <code>Fetching active premium accounts matrix...</code>")
     premium_ids = await obito.get_premium_users()
     
