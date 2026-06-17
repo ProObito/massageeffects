@@ -1,5 +1,6 @@
 # +++ Made By Obito [@i_killed_my_clan] +++
 import time
+from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import DB_URI, DB_NAME
 
@@ -45,33 +46,46 @@ class ObitoDB:
 
     # ==================== 2. PREMIUM USER FUNCTIONS ====================
     async def is_premium(self, user_id: int):
-        found = await premium_user.find_one({'_id': user_id})
-        if found:
+        found = await user_data.find_one({'_id': user_id})
+        if found and found.get('is_premium'):
             # Check if premium plan has expired dynamically
-            expiry = found.get('expiry')
-            if expiry and time.time() > expiry:
+            expiry = found.get('premium_expiry')
+            if expiry and datetime.now() > expiry:
                 await self.remove_premium(user_id)
                 return False
             return True
         return False
 
+    # FIXED: Stores dynamic datetime native objects instead of standard raw integers
     async def add_premium(self, user_id: int, days: int = 30):
-        expiry_time = time.time() + (days * 24 * 60 * 60)
-        await premium_user.update_one(
+        expiry_timestamp = datetime.now() + timedelta(days=days)
+        await user_data.update_one(
             {'_id': user_id},
-            {'$set': {'expiry': expiry_time}},
+            {
+                '$set': {
+                    'is_premium': True,
+                    'premium_expiry': expiry_timestamp,
+                    'expiry_reminder_sent': False
+                }
+            },
             upsert=True
         )
         return
 
     async def get_premium_users(self):
         premium_ids = []
-        async for doc in premium_user.find({}):
+        async for doc in user_data.find({"is_premium": True}):
             premium_ids.append(doc['_id'])
         return premium_ids
 
     async def remove_premium(self, user_id: int):
-        await premium_user.delete_one({'_id': user_id})
+        await user_data.update_one(
+            {'_id': user_id},
+            {
+                '$set': {'is_premium': False},
+                '$unset': {'premium_expiry': '', 'expiry_reminder_sent': ''}
+            }
+        )
         return
 
     # ==================== 3. ADVANCED FSUB CHANNELS ====================
@@ -172,20 +186,24 @@ class ObitoDB:
     async def get_slot_settings(self, slot_id: int):
         doc = await slots_col.find_one({'_id': f'slot_{slot_id}'})
         if not doc:
-            return {'url': None, 'api': None}
-        return doc
+            return {'url': None, 'api': None, 'tutorial': 'https://t.me/AnimeInHindi094/1066'}
+        return {
+            'url': doc.get('url'),
+            'api': doc.get('api'),
+            'tutorial': doc.get('tutorial') or 'https://t.me/AnimeInHindi094/1066'
+        }
 
-    async def update_slot_settings(self, slot_id: int, url: str, api: str):
+    async def update_slot_settings(self, slot_id: int, url: str, api: str, tutorial: str):
         await slots_col.update_one(
             {'_id': f'slot_{slot_id}'},
-            {'$set': {'url': url, 'api': api}},
+            {'$set': {'url': url, 'api': api, 'tutorial': tutorial}},
             upsert=True
         )
 
     async def remove_slot_settings(self, slot_id: int):
         await slots_col.update_one(
             {'_id': f'slot_{slot_id}'},
-            {'$set': {'url': None, 'api': None}},
+            {'$set': {'url': None, 'api': None, 'tutorial': 'https://t.me/AnimeInHindi094/1066'}},
             upsert=True
         )
 
@@ -237,5 +255,4 @@ class ObitoDB:
 
 
 # ==================== EXPORT INSTANCE (OUTSIDE CLASS) ====================
-# Global variable tracking token to interact seamlessly across bot plugins
 obito = ObitoDB()
