@@ -4,7 +4,7 @@ from plugins import web_server
 import pyromod.listen
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton  # FIXED: Missing layout imports added
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sys
 import asyncio
 from datetime import datetime
@@ -12,6 +12,9 @@ import pyrogram.utils
 
 from config import API_HASH, APP_ID, LOGGER, TG_BOT_TOKEN, TG_BOT_WORKERS, FORCESUB_CHANNEL, FORCESUB_CHANNEL2, CHANNEL_ID, PORT, OWNER_ID
 from helper_func import is_admin, is_banned
+
+# Core Background Loops Imports
+from plugins.premium import auto_premium_monitor_loop, premium_expiry_reminder_scheduler
 
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -29,7 +32,6 @@ class Bot(Client):
         )
         self.LOGGER = LOGGER
 
-    # FIXED: Added *args and **kwargs to accept internal Pyrogram runner framework parameters safely
     async def start(self, *args, **kwargs):
         await super().start(*args, **kwargs)
         usr_bot_me = await self.get_me()
@@ -82,6 +84,11 @@ class Bot(Client):
         except Exception as e:
             self.LOGGER(__name__).warning(f"Could not notify owner on startup: {e}")
 
+        # ==================== STARTUP PREMIUM BACKGROUND MONITOR LOOPS ====================
+        asyncio.create_task(auto_premium_monitor_loop(self))
+        asyncio.create_task(premium_expiry_reminder_scheduler(self))
+        self.LOGGER(__name__).info("🔥 Auto Premium Monitor & 24h Reminder Schedulers Activated Successfully!")
+
         # Web-response (Koyeb health check passes setup)
         app = web.AppRunner(await web_server())
         await app.setup()
@@ -94,8 +101,9 @@ class Bot(Client):
 
 
 # ==================== DYNAMIC /COMMANDS LIST REGISTRY ====================
-@Bot.on_message(filters.command(['cmds', 'help_cmd']) & filters.private & ~is_banned)
-async def bot_commands_dictionary_list(bot: Bot, message):  # FIXED: Changed parameter variable reference to 'bot'
+# CRITICAL FIX: Set group=-100 to intercept before any other plugin file can throw the duplicate alert popups
+@Bot.on_message(filters.command(['cmds', 'help_cmd']) & filters.private & ~is_banned, group=-100)
+async def bot_commands_dictionary_list(bot: Bot, message):
     user_id = message.from_user.id
     
     commands_text = (
@@ -106,7 +114,8 @@ async def bot_commands_dictionary_list(bot: Bot, message):  # FIXED: Changed par
         "• <code>/request</code> - Submit a direct movie or series request privately to the admin team.\n\n"
     )
     
-    if await is_admin(None, bot, message):  # FIXED: Updated context reference variable mapping to 'bot'
+    # Check if the user is admin or owner to append management section safely
+    if await is_admin(None, bot, message):
         commands_text += (
             "⚙️ <b>🛠 ADMIN CONTROL COMMANDS:</b>\n"
             "• <code>/shorten</code> - Open the inline panel to configure or remove url shorteners.\n"
@@ -134,8 +143,10 @@ async def bot_commands_dictionary_list(bot: Bot, message):  # FIXED: Changed par
         
     await message.reply_text(
         text=commands_text,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Close Menu", callback_data="close")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✖️ Close Menu", callback_data="close")]]),
+        quote=True
     )
     
-    # CRITICAL FIX: Stops down-stream file handlers from capturing this command execution and sending hardcoded alert popups
+    # CRITICAL STOP: Completely kills propagation so other duplicate files don't fire up their warning boxes
     message.stop_propagation()
+    
