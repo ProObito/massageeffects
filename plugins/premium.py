@@ -1,5 +1,5 @@
 # +++ Made By Obito [@i_killed_my_clan] +++
-
+from bot import Bot
 import asyncio
 import logging
 from datetime import datetime, timedelta
