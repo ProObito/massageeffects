@@ -1,5 +1,5 @@
 # +++ Made By Obito [@i_killed_my_clan] +++
-from bot import Bot
+
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -18,9 +18,6 @@ async def auto_premium_monitor_loop(bot):
     Background loop running every 5 minutes to automatically expire old subscriptions
     and send professional English expiration notices.
     """
-    # FIXED: Local import inside function to break circular dependencies
-    from bot import Bot
-    
     while True:
         try:
             now = datetime.now()
@@ -77,9 +74,6 @@ async def premium_expiry_reminder_scheduler(bot):
     Hourly cron background scheduler checking for profiles expiring within the next 23-24 hour window
     to distribute critical warning notice messages.
     """
-    # FIXED: Local import inside function to break circular dependencies
-    from bot import Bot
-    
     while True:
         try:
             now = datetime.now()
@@ -125,8 +119,8 @@ async def premium_expiry_reminder_scheduler(bot):
         await asyncio.sleep(3600)  # Evaluates parameters once every 1 hour execution tick
 
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
+# NOTE: Using direct bot instance routing logic via local execution to perfectly handle commands without circular dependencies
 
-@Bot.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin)
 async def add_premium_user_cmd(bot, message: Message):
     if len(message.command) < 3:
         return await message.reply_text(
@@ -162,7 +156,6 @@ async def add_premium_user_cmd(bot, message: Message):
     except Exception:
         pass
 
-@Bot.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin)
 async def remove_premium_user_cmd(bot, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>")
@@ -187,7 +180,6 @@ async def remove_premium_user_cmd(bot, message: Message):
     except Exception:
         pass
 
-@Bot.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin)
 async def list_premium_users_cmd(bot, message: Message):
     loading_msg = await message.reply_text("🔍 <code>Fetching active premium accounts matrix...</code>")
     premium_ids = await obito.get_premium_users()
@@ -202,4 +194,21 @@ async def list_premium_users_cmd(bot, message: Message):
         
     await loading_msg.delete()
     await message.reply_text(report)
+
+
+# ==================== 3. LATENT REGISTRY HOOKS ====================
+# This breaks circular layouts by registering functions directly using Bot parameters during dynamic load stages
+def setup_premium_handlers(bot_instance):
+    bot_instance.add_handler(
+        filters.command('add_premium') & filters.private & ~is_banned & is_admin,
+        add_premium_user_cmd
+    )
+    bot_instance.add_handler(
+        filters.command('remove_premium') & filters.private & ~is_banned & is_admin,
+        remove_premium_user_cmd
+    )
+    bot_instance.add_handler(
+        filters.command('list_premium') & filters.private & ~is_banned & is_admin,
+        list_premium_users_cmd
+    )
     
