@@ -14,6 +14,7 @@ from database.database import obito
 from helper_func import is_admin, is_banned
 
 # Master Control States System
+SHORTENER_STATE = {}
 ADMIN_SETUP_STATE = {}
 
 # ==================== 1. LEGACY UTILITIES ====================
