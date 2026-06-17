@@ -3,10 +3,9 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from pyrogram import filters
+from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from bot import Bot  # Pure @Bot decorator integration
 from database.database import user_data, obito  
 from helper_func import is_admin, is_banned
 
@@ -22,7 +21,6 @@ async def auto_premium_monitor_loop(bot):
     while True:
         try:
             now = datetime.now()
-            # Find active premium users whose plan has expired past the current date-time anchor
             expired_users_cursor = user_data.find({
                 "is_premium": True,
                 "premium_expiry": {"$lt": now}
@@ -31,7 +29,6 @@ async def auto_premium_monitor_loop(bot):
             async for user in expired_users_cursor:
                 user_id = int(user["_id"])
                 try:
-                    # Revert user to normal ad-supported tier
                     await obito.remove_premium(user_id)
 
                     expired_text = (
@@ -57,7 +54,7 @@ async def auto_premium_monitor_loop(bot):
         except Exception as e:
             logger.error(f"Critical error inside premium monitor loop: {e}")
         
-        await asyncio.sleep(300)  # Runs sweep routine every 5 minutes
+        await asyncio.sleep(300)
 
 async def premium_expiry_reminder_scheduler(bot):
     """
@@ -95,19 +92,19 @@ async def premium_expiry_reminder_scheduler(bot):
                     ])
                     
                     await bot.send_message(chat_id=user_id, text=reminder_text, reply_markup=keyboard)
-                    # Mark flag as True to prevent multi-message flooding
                     await user_data.update_one({"_id": user["_id"]}, {"$set": {"expiry_reminder_sent": True}})
                 except Exception as e:
-                    logger.error(f"Reminder warning distribution error for user {user.get('_id')}: {e}")
+                    logger.error(f"Reminder warning error for user {user.get('_id')}: {e}")
         except Exception as e:
             logger.error(f"Error in premium reminder scheduler thread: {e}")
             
-        await asyncio.sleep(3600)  # Evaluates parameters once every 1 hour
+        await asyncio.sleep(3600)
 
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
+# FIXED: Using standard @Client.on_message. Pyrogram automatically binds this handler to your core Bot instance at startup safely!
 
-@Bot.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin, group=-101)
-async def add_premium_user_cmd(bot: Bot, message: Message):
+@Client.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def add_premium_user_cmd(client: Client, message: Message):
     if len(message.command) < 3:
         await message.reply_text(
             "❌ <b>Usage Format Error!</b>\n\n"
@@ -138,7 +135,7 @@ async def add_premium_user_cmd(bot: Bot, message: Message):
     )
     
     try:
-        await bot.send_message(
+        await client.send_message(
             chat_id=target_user_id,
             text=f"🎉 <b>Congratulations!</b>\n\n"
                  f"Your account has been upgraded to the <b>Premium Ad-Free Tier</b> for the next <code>{duration_days} Days</code>.\n"
@@ -149,8 +146,8 @@ async def add_premium_user_cmd(bot: Bot, message: Message):
         
     message.stop_propagation()
 
-@Bot.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin, group=-101)
-async def remove_premium_user_cmd(bot: Bot, message: Message):
+@Client.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def remove_premium_user_cmd(client: Client, message: Message):
     if len(message.command) < 2:
         await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>", quote=True)
         message.stop_propagation()
@@ -173,7 +170,7 @@ async def remove_premium_user_cmd(bot: Bot, message: Message):
     await message.reply_text(f"🗑 <b>Premium subscription tier revoked for user ID:</b> <code>{target_user_id}</code>", quote=True)
     
     try:
-        await bot.send_message(
+        await client.send_message(
             chat_id=target_user_id,
             text="🚨 <b>Notification:</b> Your premium subscription package has been manually revoked by the management team."
         )
@@ -182,8 +179,8 @@ async def remove_premium_user_cmd(bot: Bot, message: Message):
         
     message.stop_propagation()
 
-@Bot.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin, group=-101)
-async def list_premium_users_cmd(bot: Bot, message: Message):
+@Client.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def list_premium_users_cmd(client: Client, message: Message):
     loading_msg = await message.reply_text("🔍 <code>Fetching active premium accounts matrix...</code>")
     premium_ids = await obito.get_premium_users()
     
