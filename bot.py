@@ -1,3 +1,5 @@
+# +++ Centralized Bot Core Engine - Made By Obito +++
+
 from aiohttp import web
 from plugins import web_server
 
@@ -13,8 +15,8 @@ import pyrogram.utils
 from config import API_HASH, APP_ID, LOGGER, TG_BOT_TOKEN, TG_BOT_WORKERS, FORCESUB_CHANNEL, FORCESUB_CHANNEL2, CHANNEL_ID, PORT, OWNER_ID
 from helper_func import is_admin, is_banned
 
-# Core Background Loops Imports
-from plugins.premium import auto_premium_monitor_loop, premium_expiry_reminder_scheduler
+# FIXED: Import background tasks and setup function without top-level Client hooks to prevent circular imports
+from plugins.premium import auto_premium_monitor_loop, premium_expiry_reminder_scheduler, setup_premium_handlers
 
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -84,7 +86,11 @@ class Bot(Client):
         except Exception as e:
             self.LOGGER(__name__).warning(f"Could not notify owner on startup: {e}")
 
-        # ==================== STARTUP PREMIUM BACKGROUND MONITOR LOOPS ====================
+        # ==================== STARTUP PREMIUM DYNAMIC ROUTING & TIMERS ====================
+        # This initializes add_premium / remove_premium / list_premium commands without loops
+        setup_premium_handlers(self)
+        
+        # Starts background tasks asynchronously
         asyncio.create_task(auto_premium_monitor_loop(self))
         asyncio.create_task(premium_expiry_reminder_scheduler(self))
         self.LOGGER(__name__).info("🔥 Auto Premium Monitor & 24h Reminder Schedulers Activated Successfully!")
@@ -101,7 +107,7 @@ class Bot(Client):
 
 
 # ==================== DYNAMIC /COMMANDS LIST REGISTRY ====================
-# CRITICAL FIX: Set group=-100 to intercept before any other plugin file can throw the duplicate alert popups
+# FIXED: Set group=-100 to intercept everything first, ensuring normal users can call it and blocking the duplicate alert popups completely
 @Bot.on_message(filters.command(['cmds', 'help_cmd']) & filters.private & ~is_banned, group=-100)
 async def bot_commands_dictionary_list(bot: Bot, message):
     user_id = message.from_user.id
@@ -114,7 +120,7 @@ async def bot_commands_dictionary_list(bot: Bot, message):
         "• <code>/request</code> - Submit a direct movie or series request privately to the admin team.\n\n"
     )
     
-    # Check if the user is admin or owner to append management section safely
+    # Render admin menu block dynamically if the checking wrapper validates permissions
     if await is_admin(None, bot, message):
         commands_text += (
             "⚙️ <b>🛠 ADMIN CONTROL COMMANDS:</b>\n"
@@ -147,6 +153,6 @@ async def bot_commands_dictionary_list(bot: Bot, message):
         quote=True
     )
     
-    # CRITICAL STOP: Completely kills propagation so other duplicate files don't fire up their warning boxes
+    # CRITICAL INJECTION: Instantly kills downstream execution so no other hidden file can inject an unwanted alert popup box
     message.stop_propagation()
     
