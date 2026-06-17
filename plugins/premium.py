@@ -5,8 +5,9 @@ import logging
 from datetime import datetime, timedelta
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.handlers import MessageHandler
 
-from database.database import obito  # Uses your centralized obito database module instance
+from database.database import user_data, obito  # FIXED: Direct clean variable import for mongodb
 from helper_func import is_admin, is_banned
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,8 @@ async def auto_premium_monitor_loop(bot):
         try:
             now = datetime.now()
 
-            # Find active premium users whose plan has expired past the current date-time anchor
-            expired_users_cursor = obito.user_data.find({
+            # FIXED: querying direct user_data engine array
+            expired_users_cursor = user_data.find({
                 "is_premium": True,
                 "premium_expiry": {"$lt": now}
             })
@@ -31,16 +32,8 @@ async def auto_premium_monitor_loop(bot):
             async for user in expired_users_cursor:
                 user_id = int(user["_id"])
                 try:
-                    # Clean clear database modification parameters - revert to ad tier
-                    await obito.user_data.update_one(
-                        {"_id": user_id},
-                        {
-                            "$set": {"is_premium": False},
-                            "$unset": {"premium_expiry": "", "expiry_reminder_sent": ""}
-                        }
-                    )
+                    await obito.remove_premium(user_id)
 
-                    # Professional English Expiry Alert Message Text
                     expired_text = (
                         "🚨 <b>YOUR PREMIUM PLAN HAS EXPIRED!</b>\n\n"
                         "Hello User,\n"
@@ -66,7 +59,7 @@ async def auto_premium_monitor_loop(bot):
         except Exception as e:
             logger.error(f"Critical error inside premium engine expiry monitor loop: {e}")
 
-        await asyncio.sleep(300)  # Evaluation run sweep routine interval defaults to 5 minutes
+        await asyncio.sleep(300)
 
 
 async def premium_expiry_reminder_scheduler(bot):
@@ -80,7 +73,7 @@ async def premium_expiry_reminder_scheduler(bot):
             reminder_time_start = now + timedelta(hours=23)
             reminder_time_end = now + timedelta(hours=24)
             
-            upcoming_expiry_cursor = obito.user_data.find({
+            upcoming_expiry_cursor = user_data.find({
                 "is_premium": True,
                 "premium_expiry": {"$gte": reminder_time_start, "$lte": reminder_time_end},
                 "expiry_reminder_sent": {"$ne": True}
@@ -106,8 +99,7 @@ async def premium_expiry_reminder_scheduler(bot):
                     
                     await bot.send_message(chat_id=user_id, text=reminder_text, reply_markup=keyboard)
                     
-                    # Log state execution boolean flag variable to avoid duplicate triggers
-                    await obito.user_data.update_one({"_id": user["_id"]}, {"$set": {"expiry_reminder_sent": True}})
+                    await user_data.update_one({"_id": user["_id"]}, {"$set": {"expiry_reminder_sent": True}})
                     await asyncio.sleep(1)
                     
                 except Exception as e:
@@ -116,10 +108,9 @@ async def premium_expiry_reminder_scheduler(bot):
         except Exception as e:
             logger.error(f"Error in premium warning scheduler routine thread: {e}")
             
-        await asyncio.sleep(3600)  # Evaluates parameters once every 1 hour execution tick
+        await asyncio.sleep(3600)
 
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
-# NOTE: Using direct bot instance routing logic via local execution to perfectly handle commands without circular dependencies
 
 async def add_premium_user_cmd(bot, message: Message):
     if len(message.command) < 3:
@@ -139,7 +130,6 @@ async def add_premium_user_cmd(bot, message: Message):
     duration_days = int(days_str)
     
     await obito.add_premium(target_user_id, duration_days)
-    
     await message.reply_text(
         f"✅ <b>Premium Tier Activated Successfully!</b>\n\n"
         f"👤 <b>User ID:</b> <code>{target_user_id}</code>\n"
@@ -197,18 +187,18 @@ async def list_premium_users_cmd(bot, message: Message):
 
 
 # ==================== 3. LATENT REGISTRY HOOKS ====================
-# This breaks circular layouts by registering functions directly using Bot parameters during dynamic load stages
 def setup_premium_handlers(bot_instance):
+    # FIXED: Using explicit keyword handling arguments matching standard OrderedDict integer matrices
     bot_instance.add_handler(
-        filters.command('add_premium') & filters.private & ~is_banned & is_admin,
-        add_premium_user_cmd
+        MessageHandler(add_premium_user_cmd, filters.command('add_premium') & filters.private & ~is_banned & is_admin),
+        group=0
     )
     bot_instance.add_handler(
-        filters.command('remove_premium') & filters.private & ~is_banned & is_admin,
-        remove_premium_user_cmd
+        MessageHandler(remove_premium_user_cmd, filters.command('remove_premium') & filters.private & ~is_banned & is_admin),
+        group=0
     )
     bot_instance.add_handler(
-        filters.command('list_premium') & filters.private & ~is_banned & is_admin,
-        list_premium_users_cmd
+        MessageHandler(list_premium_users_cmd, filters.command('list_premium') & filters.private & ~is_banned & is_admin),
+        group=0
     )
     
