@@ -1,155 +1,200 @@
-import time
-from pyrogram import Client, filters
-from pyrogram.types import Message
+# +++ Made By Obito [@i_killed_my_clan] +++
+
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from pyrogram import filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import Bot
-from database.database import obito, premium_user
-from config import OWNER_ID, ADMINS, PLAN_TEXT 
+from database.database import obito  # Uses your centralized obito database module instance
+from helper_func import is_admin, is_banned
 
-# ==================== 2. ADVANCED ADD PREMIUM WITH DAYS ====================
-@Bot.on_message(filters.command('add_premium') & filters.user(int(OWNER_ID)))
-async def add_premium_command(client: Client, message: Message):
+logger = logging.getLogger(__name__)
+
+# ==================== 1. BACKGROUND SCHEDULERS & MONITORS ====================
+
+async def auto_premium_monitor_loop(bot: Bot):
+    """
+    Background loop running every 5 minutes to automatically expire old subscriptions
+    and send professional English expiration notices.
+    """
+    while True:
+        try:
+            now = datetime.now()
+
+            # Find active premium users whose plan has expired past the current date-time anchor
+            expired_users_cursor = obito.user_data.find({
+                "is_premium": True,
+                "premium_expiry": {"$lt": now}
+            })
+
+            async for user in expired_users_cursor:
+                user_id = int(user["_id"])
+                try:
+                    # Clean clear database modification parameters - revert to ad tier
+                    await obito.user_data.update_one(
+                        {"_id": user_id},
+                        {
+                            "$set": {"is_premium": False},
+                            "$unset": {"premium_expiry": "", "expiry_reminder_sent": ""}
+                        }
+                    )
+
+                    # Professional English Expiry Alert Message Text
+                    expired_text = (
+                        "🚨 <b>YOUR PREMIUM PLAN HAS EXPIRED!</b>\n\n"
+                        "Hello User,\n"
+                        "Your premium ad-free subscription has officially expired, and your account has been reverted to the standard ad-supported mode.\n\n"
+                        "✨ <b>Renew your plan now to continue enjoying:</b>\n"
+                        "• High-speed direct link generation\n"
+                        "• 100% seamless ad-free experience\n"
+                        "• Priority movie & series requests handling\n\n"
+                        "💡 Click the button below to renew your membership instantly and enjoy uninterrupted services."
+                    )
+
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("👑 Renew Premium Plan", url="https://t.me/+lZ_rLJwBKnllODY1")],
+                        [InlineKeyboardButton("✖️ Close Menu", callback_data="close")]
+                    ])
+
+                    await bot.send_message(chat_id=user_id, text=expired_text, reply_markup=keyboard)
+                    logger.info(f"Successfully expired and notified premium user: {user_id}")
+
+                except Exception as ex:
+                    logger.error(f"Failed to process auto-expiry notification for user {user_id}: {ex}")
+
+        except Exception as e:
+            logger.error(f"Critical error inside premium engine expiry monitor loop: {e}")
+
+        await asyncio.sleep(300)  # Evaluation run sweep routine interval defaults to 5 minutes
+
+
+async def premium_expiry_reminder_scheduler(bot: Bot):
+    """
+    Hourly cron background scheduler checking for profiles expiring within the next 23-24 hour window
+    to distribute critical warning notice messages.
+    """
+    while True:
+        try:
+            now = datetime.now()
+            reminder_time_start = now + timedelta(hours=23)
+            reminder_time_end = now + timedelta(hours=24)
+            
+            upcoming_expiry_cursor = obito.user_data.find({
+                "is_premium": True,
+                "premium_expiry": {"$gte": reminder_time_start, "$lte": reminder_time_end},
+                "expiry_reminder_sent": {"$ne": True}
+            })
+            
+            async for user in upcoming_expiry_cursor:
+                try:
+                    user_id = int(user["_id"])
+                    expiry_date_str = user["premium_expiry"].strftime("%d-%b-%Y %I:%M %p")
+                    
+                    reminder_text = (
+                        "⚠️ <b>PREMIUM SUBSCRIPTION RENEWAL REMINDER</b>\n\n"
+                        "Dear Customer,\n"
+                        "This is an automated notification to inform you that your ad-free premium access will expire in less than 24 hours.\n\n"
+                        f"📅 <b>Expiration Timestamp:</b> <code>{expiry_date_str}</code>\n\n"
+                        "If you wish to maintain your premium benefits and secure ad-free navigation, please renew your subscription now."
+                    )
+                    
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("👑 Renew Membership Now", url="https://t.me/+lZ_rLJwBKnllODY1")],
+                        [InlineKeyboardButton("✖️ Close", callback_data="close")]
+                    ])
+                    
+                    await bot.send_message(chat_id=user_id, text=reminder_text, reply_markup=keyboard)
+                    
+                    # Log state execution boolean flag variable to avoid duplicate triggers
+                    await obito.user_data.update_one({"_id": user["_id"]}, {"$set": {"expiry_reminder_sent": True}})
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send 24h warning to user {user.get('_id')}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error in premium warning scheduler routine thread: {e}")
+            
+        await asyncio.sleep(3600)  # Evaluates parameters once every 1 hour execution tick
+
+# ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
+
+@Bot.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin)
+async def add_premium_user_cmd(bot: Bot, message: Message):
+    if len(message.command) < 3:
+        return await message.reply_text(
+            "❌ <b>Usage Format Error!</b>\n\n"
+            "<blockquote>Provide target user ID and duration in days:</blockquote>\n"
+            "» <code>/add_premium 123456789 30</code> (For 30 Days plan)"
+        )
+        
+    user_str = message.command[1]
+    days_str = message.command[2]
+    
+    if not user_str.isdigit() or not days_str.isdigit():
+        return await message.reply_text("❌ <b>Error:</b> User ID and Days value must be integers only.")
+        
+    target_user_id = int(user_str)
+    duration_days = int(days_str)
+    
+    await obito.add_premium(target_user_id, duration_days)
+    
+    await message.reply_text(
+        f"✅ <b>Premium Tier Activated Successfully!</b>\n\n"
+        f"👤 <b>User ID:</b> <code>{target_user_id}</code>\n"
+        f"⏳ <b>Duration Allocated:</b> <code>{duration_days} Days</code>"
+    )
+    
+    try:
+        await bot.send_message(
+            chat_id=target_user_id,
+            text=f"🎉 <b>Congratulations!</b>\n\n"
+                 f"Your account has been upgraded to the <b>Premium Ad-Free Tier</b> for the next <code>{duration_days} Days</code>.\n"
+                 f"Enjoy high-speed ads free file downloads!"
+        )
+    except Exception:
+        pass
+
+@Bot.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin)
+async def remove_premium_user_cmd(bot: Bot, message: Message):
     if len(message.command) < 2:
-        await message.reply_text("<b>❌ Incorrect Format!</b>\n\n<b>Use:</b> `/add_premium {user_id} {days}`\n<b>Example:</b> `/add_premium 123456789 30`")
-        return
-
-    try:
-        user_id = int(message.command[1])
-        # Agar admin days pass karna bhool gaya toh default 30 days apply hoga
-        days = int(message.command[2]) if len(message.command) > 2 else 30
-    except ValueError:
-        await message.reply_text("❌ Invalid User ID or Days format. Please pass integers only.")
-        return
-
-    try:
-        user = await client.get_users(user_id)
-        user_name = user.first_name + (" " + user.last_name if user.last_name else "")
-    except Exception as e:
-        await message.reply_text(f"Error fetching user information: {e}")
-        return
-
-    if not await obito.is_premium(user_id):
-        await obito.add_premium(user_id, days=days)
+        return await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>")
         
-        # Save explicit plan metadata tracker info into collection for `/my_plan` tracking calculations
-        await premium_user.update_one(
-            {'_id': user_id},
-            {'$set': {'total_duration_days': days, 'activated_at': time.time()}},
-            upsert=True
-        )
+    user_str = message.command[1]
+    if not user_str.isdigit():
+        return await message.reply_text("❌ <b>Error:</b> User ID must be a valid integer.")
         
-        await message.reply(f"✅ User <b>{user_name}</b> (`{user_id}`) has been added as a premium user for <b>{days} Days</b>.")
-        try:
-            await client.send_message(user_id, f"🎉 **Congratulations! Your Premium Membership has been activated for {days} Days!**")
-        except Exception as e:
-            await message.reply(f"Failed to notify the user: {e}")
-    else:
-        await message.reply(f"⚠️ User {user_name} (`{user_id}`) is already a premium user.")
-
-
-# ==================== 3. REMOVE PREMIUM COMMAND ====================
-@Bot.on_message(filters.command('remove_premium') & filters.user(int(OWNER_ID)))
-async def remove_premium_command(client: Client, message: Message):
-    if len(message.command) != 2:
-        await message.reply_text("<b>Use:</b> `/remove_premium {user_id}`")
-        return
-
-    try:
-        user_id = int(message.command[1])
-    except ValueError:
-        await message.reply_text("Invalid user ID.")
-        return
-
-    try:
-        user = await client.get_users(user_id)
-        user_name = user.first_name + (" " + user.last_name if user.last_name else "")
-    except Exception as e:
-        await message.reply_text(f"Error fetching user information: {e}")
-        return
-
-    if await obito.is_premium(user_id):
-        await obito.remove_premium(user_id)
-        await message.reply(f"⛔️ User {user_name} (`{user_id}`) has been removed from premium users.")
-        try:
-            await client.send_message(user_id, "Your Premium membership has been ended. Contact admins to renew here - @Its_Lozo")
-        except Exception as e:
-            await message.reply(f"Failed to notify the user: {e}")
-    else:
-        await message.reply(f"User {user_name} (`{user_id}`) is not a premium user.")
-
-
-# ==================== 4. LIST PREMIUM USERS ====================
-@Bot.on_message(filters.command('list_premium') & filters.user(int(OWNER_ID)))
-async def list_premium_command(client: Client, message: Message):
-    premium_users = await obito.get_premium_users()
-    if not premium_users:
-        await message.reply("There are no premium users.")
-        return
-
-    user_list = []
-    for user_id in premium_users:
-        try:
-            user = await client.get_users(user_id)
-            user_name = user.first_name + (" " + user.last_name if user.last_name else "")
-            user_list.append(f"👤 {user_name} - (`{user_id}`)")
-        except Exception:
-            user_list.append(f"👤 User ID: `{user_id}` (Name: Could not fetch)")
-
-    user_list_text = "\n".join(user_list)
-    await message.reply(f"<b>✨ Premium Users List:</b>\n\n{user_list_text}")
-
-
-# ==================== 5. DYNAMIC MY PLAN MANAGEMENT ====================
-@Bot.on_message(filters.command('my_plan') & filters.private)
-async def my_plan_command(client: Client, message: Message):
-    user_id = message.from_user.id
+    target_user_id = int(user_str)
     
-    # Check regular subscription state inside DB object
-    is_user_premium = await obito.is_premium(user_id)
+    if not await obito.is_premium(target_user_id):
+        return await message.reply_text("❌ <b>Error:</b> This user does not have an active premium status inside database.")
+        
+    await obito.remove_premium(target_user_id)
+    await message.reply_text(f"🗑 <b>Premium subscription tier revoked for user ID:</b> <code>{target_user_id}</code>")
     
-    if not is_user_premium:
-        await message.reply_text(
-            "<b>🚫 You don't have any active premium plans!</b>\n\n"
-            "Ads: Enabled ❌\n"
-            "Premium Features: Locked 🔒\n\n"
-            "💡 Unlock premium to download files instantly without shorteners!\n"
-            "Contact admin here to buy - @Its_Lozo"
+    try:
+        await bot.send_message(
+            chat_id=target_user_id,
+            text="🚨 <b>Notification:</b> Your premium subscription package has been manually revoked by the management team."
         )
-        return
+    except Exception:
+        pass
 
-    # Fetch extended structural stats breakdown parameters from mongo context document metadata
-    premium_data = await premium_user.find_one({'_id': user_id})
+@Bot.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin)
+async def list_premium_users_cmd(bot: Bot, message: Message):
+    loading_msg = await message.reply_text("🔍 <code>Fetching active premium accounts matrix...</code>")
+    premium_ids = await obito.get_premium_users()
     
-    if premium_data:
-        expiry_timestamp = premium_data.get('expiry', 0)
-        total_days = premium_data.get('total_duration_days', 'N/A')
+    if not premium_ids:
+        await loading_msg.delete()
+        return await message.reply_text("ℹ️ <b>No active premium profiles found inside database index registry.</b>")
         
-        # Calculate time difference remaining variables calculations logic
-        time_left_seconds = expiry_timestamp - time.time()
+    report = "👑 <b>ACTIVE PREMIUM USERS LOG LIST:</b>\n\n"
+    for index, p_id in enumerate(premium_ids, start=1):
+        report += f"{index}. 👤 <b>User Key:</b> <code>{p_id}</code>\n"
         
-        if time_left_seconds > 0:
-            days_left = int(time_left_seconds // (24 * 3600))
-            hours_left = int((time_left_seconds % (24 * 3600)) // 3600)
-            minutes_left = int((time_left_seconds % 3600) // 60)
-            
-            readable_validity = f"<code>{days_left} Days, {hours_left} Hours, {minutes_left} Minutes</code>"
-        else:
-            readable_validity = "Expired / System processing delay"
-            
-        # Format custom custom message layer strings imported out from configuration global schema mapping
-        formatted_plan_text = PLAN_TEXT.format(
-            user_mention=message.from_user.mention,
-            user_id=user_id,
-            total_days=total_days,
-            time_left=readable_validity
-        )
-        
-        await message.reply_text(formatted_plan_text)
-    else:
-        # Fallback safeguard state layer checking parameters control validation 
-        await message.reply_text(
-            f"<b>✨ Premium State: Active ✅</b>\n\n"
-            f"👤 <b>User:</b> {message.from_user.mention}\n"
-            f"ℹ️ Detailed tracking timeline values not found in records, please contact support team admin. @Its_Lozo"
-        )
-        
+    await loading_msg.delete()
+    await message.reply_text(report)
+    
