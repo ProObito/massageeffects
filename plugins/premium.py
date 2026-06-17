@@ -5,9 +5,9 @@ import logging
 from datetime import datetime, timedelta
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.handlers import MessageHandler
 
-from database.database import user_data, obito  # FIXED: Direct clean variable import for mongodb
+from bot import Bot  # Pure @Bot decorator integration
+from database.database import user_data, obito  
 from helper_func import is_admin, is_banned
 
 logger = logging.getLogger(__name__)
@@ -22,8 +22,7 @@ async def auto_premium_monitor_loop(bot):
     while True:
         try:
             now = datetime.now()
-
-            # FIXED: querying direct user_data engine array
+            # Find active premium users whose plan has expired past the current date-time anchor
             expired_users_cursor = user_data.find({
                 "is_premium": True,
                 "premium_expiry": {"$lt": now}
@@ -32,6 +31,7 @@ async def auto_premium_monitor_loop(bot):
             async for user in expired_users_cursor:
                 user_id = int(user["_id"])
                 try:
+                    # Revert user to normal ad-supported tier
                     await obito.remove_premium(user_id)
 
                     expired_text = (
@@ -52,15 +52,12 @@ async def auto_premium_monitor_loop(bot):
 
                     await bot.send_message(chat_id=user_id, text=expired_text, reply_markup=keyboard)
                     logger.info(f"Successfully expired and notified premium user: {user_id}")
-
                 except Exception as ex:
-                    logger.error(f"Failed to process auto-expiry notification for user {user_id}: {ex}")
-
+                    logger.error(f"Auto-expiry notify error for user {user_id}: {ex}")
         except Exception as e:
-            logger.error(f"Critical error inside premium engine expiry monitor loop: {e}")
-
-        await asyncio.sleep(300)
-
+            logger.error(f"Critical error inside premium monitor loop: {e}")
+        
+        await asyncio.sleep(300)  # Runs sweep routine every 5 minutes
 
 async def premium_expiry_reminder_scheduler(bot):
     """
@@ -98,33 +95,36 @@ async def premium_expiry_reminder_scheduler(bot):
                     ])
                     
                     await bot.send_message(chat_id=user_id, text=reminder_text, reply_markup=keyboard)
-                    
+                    # Mark flag as True to prevent multi-message flooding
                     await user_data.update_one({"_id": user["_id"]}, {"$set": {"expiry_reminder_sent": True}})
-                    await asyncio.sleep(1)
-                    
                 except Exception as e:
-                    logger.error(f"Failed to send 24h warning to user {user.get('_id')}: {e}")
-                    
+                    logger.error(f"Reminder warning distribution error for user {user.get('_id')}: {e}")
         except Exception as e:
-            logger.error(f"Error in premium warning scheduler routine thread: {e}")
+            logger.error(f"Error in premium reminder scheduler thread: {e}")
             
-        await asyncio.sleep(3600)
+        await asyncio.sleep(3600)  # Evaluates parameters once every 1 hour
 
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
 
-async def add_premium_user_cmd(bot, message: Message):
+@Bot.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def add_premium_user_cmd(bot: Bot, message: Message):
     if len(message.command) < 3:
-        return await message.reply_text(
+        await message.reply_text(
             "❌ <b>Usage Format Error!</b>\n\n"
             "<blockquote>Provide target user ID and duration in days:</blockquote>\n"
-            "» <code>/add_premium 123456789 30</code> (For 30 Days plan)"
+            "» <code>/add_premium 123456789 30</code> (For 30 Days plan)",
+            quote=True
         )
+        message.stop_propagation()
+        return
         
     user_str = message.command[1]
     days_str = message.command[2]
     
     if not user_str.isdigit() or not days_str.isdigit():
-        return await message.reply_text("❌ <b>Error:</b> User ID and Days value must be integers only.")
+        await message.reply_text("❌ <b>Error:</b> User ID and Days value must be integers only.", quote=True)
+        message.stop_propagation()
+        return
         
     target_user_id = int(user_str)
     duration_days = int(days_str)
@@ -133,7 +133,8 @@ async def add_premium_user_cmd(bot, message: Message):
     await message.reply_text(
         f"✅ <b>Premium Tier Activated Successfully!</b>\n\n"
         f"👤 <b>User ID:</b> <code>{target_user_id}</code>\n"
-        f"⏳ <b>Duration Allocated:</b> <code>{duration_days} Days</code>"
+        f"⏳ <b>Duration Allocated:</b> <code>{duration_days} Days</code>",
+        quote=True
     )
     
     try:
@@ -145,22 +146,31 @@ async def add_premium_user_cmd(bot, message: Message):
         )
     except Exception:
         pass
+        
+    message.stop_propagation()
 
-async def remove_premium_user_cmd(bot, message: Message):
+@Bot.on_message(filters.command('remove_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def remove_premium_user_cmd(bot: Bot, message: Message):
     if len(message.command) < 2:
-        return await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>")
+        await message.reply_text("❌ <b>Usage Format Error:</b> <code>/remove_premium [user_id]</code>", quote=True)
+        message.stop_propagation()
+        return
         
     user_str = message.command[1]
     if not user_str.isdigit():
-        return await message.reply_text("❌ <b>Error:</b> User ID must be a valid integer.")
+        await message.reply_text("❌ <b>Error:</b> User ID must be a valid integer.", quote=True)
+        message.stop_propagation()
+        return
         
     target_user_id = int(user_str)
     
     if not await obito.is_premium(target_user_id):
-        return await message.reply_text("❌ <b>Error:</b> This user does not have an active premium status inside database.")
+        await message.reply_text("❌ <b>Error:</b> This user does not have an active premium status inside database.", quote=True)
+        message.stop_propagation()
+        return
         
     await obito.remove_premium(target_user_id)
-    await message.reply_text(f"🗑 <b>Premium subscription tier revoked for user ID:</b> <code>{target_user_id}</code>")
+    await message.reply_text(f"🗑 <b>Premium subscription tier revoked for user ID:</b> <code>{target_user_id}</code>", quote=True)
     
     try:
         await bot.send_message(
@@ -169,36 +179,25 @@ async def remove_premium_user_cmd(bot, message: Message):
         )
     except Exception:
         pass
+        
+    message.stop_propagation()
 
-async def list_premium_users_cmd(bot, message: Message):
+@Bot.on_message(filters.command('list_premium') & filters.private & ~is_banned & is_admin, group=-101)
+async def list_premium_users_cmd(bot: Bot, message: Message):
     loading_msg = await message.reply_text("🔍 <code>Fetching active premium accounts matrix...</code>")
     premium_ids = await obito.get_premium_users()
     
     if not premium_ids:
         await loading_msg.delete()
-        return await message.reply_text("ℹ️ <b>No active premium profiles found inside database index registry.</b>")
+        await message.reply_text("ℹ️ <b>No active premium profiles found inside database index registry.</b>", quote=True)
+        message.stop_propagation()
+        return
         
     report = "👑 <b>ACTIVE PREMIUM USERS LOG LIST:</b>\n\n"
     for index, p_id in enumerate(premium_ids, start=1):
         report += f"{index}. 👤 <b>User Key:</b> <code>{p_id}</code>\n"
         
     await loading_msg.delete()
-    await message.reply_text(report)
-
-
-# ==================== 3. LATENT REGISTRY HOOKS ====================
-def setup_premium_handlers(bot_instance):
-    # FIXED: Using explicit keyword handling arguments matching standard OrderedDict integer matrices
-    bot_instance.add_handler(
-        MessageHandler(add_premium_user_cmd, filters.command('add_premium') & filters.private & ~is_banned & is_admin),
-        group=0
-    )
-    bot_instance.add_handler(
-        MessageHandler(remove_premium_user_cmd, filters.command('remove_premium') & filters.private & ~is_banned & is_admin),
-        group=0
-    )
-    bot_instance.add_handler(
-        MessageHandler(list_premium_users_cmd, filters.command('list_premium') & filters.private & ~is_banned & is_admin),
-        group=0
-    )
+    await message.reply_text(report, quote=True)
+    message.stop_propagation()
     
