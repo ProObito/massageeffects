@@ -101,15 +101,14 @@ async def premium_expiry_reminder_scheduler(bot):
         await asyncio.sleep(3600)
 
 # ==================== 2. ADMIN INTERACTIVE CONTROLLERS ====================
-# FIXED: Using standard @Client.on_message. Pyrogram automatically binds this handler to your core Bot instance at startup safely!
 
 @Client.on_message(filters.command('add_premium') & filters.private & ~is_banned & is_admin, group=-101)
 async def add_premium_user_cmd(client: Client, message: Message):
     if len(message.command) < 3:
         await message.reply_text(
             "❌ <b>Usage Format Error!</b>\n\n"
-            "<blockquote>Provide target user ID and duration in days:</blockquote>\n"
-            "» <code>/add_premium 123456789 30</code> (For 30 Days plan)",
+            "<blockquote>Provide target user ID and duration in days:\n"
+            "» <code>/add_premium 123456789 30</code></blockquote>",
             quote=True
         )
         message.stop_propagation()
@@ -126,11 +125,19 @@ async def add_premium_user_cmd(client: Client, message: Message):
     target_user_id = int(user_str)
     duration_days = int(days_str)
     
+    # Fetch User Name from Telegram dynamically
+    try:
+        user_obj = await client.get_users(target_user_id)
+        user_name = user_obj.first_name
+    except Exception:
+        user_name = "Unknown User"
+    
     await obito.add_premium(target_user_id, duration_days)
     await message.reply_text(
         f"✅ <b>Premium Tier Activated Successfully!</b>\n\n"
-        f"👤 <b>User ID:</b> <code>{target_user_id}</code>\n"
-        f"⏳ <b>Duration Allocated:</b> <code>{duration_days} Days</code>",
+        f"<blockquote>👤 <b>Name:</b> {user_name}\n"
+        f"🆔 <b>User ID:</b> <code>{target_user_id}</code>\n"
+        f"⏳ <b>Duration Allocated:</b> <code>{duration_days} Days</code></blockquote>",
         quote=True
     )
     
@@ -165,9 +172,21 @@ async def remove_premium_user_cmd(client: Client, message: Message):
         await message.reply_text("❌ <b>Error:</b> This user does not have an active premium status inside database.", quote=True)
         message.stop_propagation()
         return
+
+    # Fetch User Name from Telegram dynamically
+    try:
+        user_obj = await client.get_users(target_user_id)
+        user_name = user_obj.first_name
+    except Exception:
+        user_name = "Unknown User"
         
     await obito.remove_premium(target_user_id)
-    await message.reply_text(f"🗑 <b>Premium subscription tier revoked for user ID:</b> <code>{target_user_id}</code>", quote=True)
+    await message.reply_text(
+        f"🗑 <b>Premium Subscription Tier Revoked!</b>\n\n"
+        f"<blockquote>👤 <b>Name:</b> {user_name}\n"
+        f"🆔 <b>User ID:</b> <code>{target_user_id}</code></blockquote>", 
+        quote=True
+    )
     
     try:
         await client.send_message(
@@ -192,9 +211,15 @@ async def list_premium_users_cmd(client: Client, message: Message):
         
     report = "👑 <b>ACTIVE PREMIUM USERS LOG LIST:</b>\n\n"
     for index, p_id in enumerate(premium_ids, start=1):
-        report += f"{index}. 👤 <b>User Key:</b> <code>{p_id}</code>\n"
+        # Fetch individual names for the log lists dynamically
+        try:
+            user_obj = await client.get_users(int(p_id))
+            user_name = user_obj.first_name
+        except Exception:
+            user_name = "Unknown User"
+            
+        report += f"{index}. <blockquote>👤 <b>Name:</b> {user_name}\n🆔 <b>ID:</b> <code>{p_id}</code></blockquote>\n"
         
     await loading_msg.delete()
     await message.reply_text(report, quote=True)
     message.stop_propagation()
-    
