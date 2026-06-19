@@ -223,3 +223,33 @@ async def list_premium_users_cmd(client: Client, message: Message):
     await loading_msg.delete()
     await message.reply_text(report, quote=True)
     message.stop_propagation()
+
+@Client.on_message(filters.command('my_plan') & filters.private & ~is_banned, group=-101)
+async def check_my_plan_cmd(client: Client, message: Message):
+    user_id = message.from_user.id
+    user_data_entry = await user_data.find_one({"_id": user_id})
+    
+    if user_data_entry and user_data_entry.get("is_premium"):
+        expiry = user_data_entry.get("premium_expiry")
+        # Time calculation
+        remaining = expiry - datetime.now()
+        days = remaining.days
+        hours = remaining.seconds // 3600
+        
+        status_text = (
+            "👑 <b>YOUR PREMIUM MEMBERSHIP STATUS</b>\n\n"
+            "<blockquote>👤 <b>Name:</b> {name}\n"
+            "🆔 <b>User ID:</b> <code>{id}</code>\n"
+            "💎 <b>Plan Status:</b> Active\n"
+            "⏳ <b>Time Remaining:</b> {days} Days, {hours} Hours</blockquote>"
+        ).format(name=message.from_user.first_name, id=user_id, days=days, hours=hours)
+        
+        await message.reply_text(status_text, quote=True)
+    else:
+        await message.reply_text(
+            "ℹ️ <b>Membership Status:</b> <code>Standard (Ad-Supported)</code>\n\n"
+            "You are currently not on a premium plan. Please contact admins for subscription details.",
+            quote=True
+        )
+    message.stop_propagation()
+    
