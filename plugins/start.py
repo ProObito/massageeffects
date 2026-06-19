@@ -144,9 +144,9 @@ async def start_command(client: Client, message: Message):
         return
     else:
         reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Help", callback_data='help'),
-             InlineKeyboardButton("About", callback_data='about')],
-            [InlineKeyboardButton("Close ✖️", callback_data='close')]
+            [InlineKeyboardButton("• ʜᴇʟᴘ", callback_data='help'),
+             InlineKeyboardButton("ᴀʙᴏᴜᴛ •", callback_data='about')],
+            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data='close')]
         ])
         try:
             await message.reply_photo(
