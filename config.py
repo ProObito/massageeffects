@@ -36,12 +36,11 @@ START_PIC = os.environ.get("START_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
 FORCE_PIC = os.environ.get("FORCE_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
 
 #text
-HELP_TXT = """<b><blockquote>⚠️ Hᴇʏ, {} ×</blockquote>
-Yᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ {count}/{total} ᴄʜᴀɴɴᴇʟs ʏᴇᴛ. Pʟᴇᴀsᴇ ᴊᴏɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟs ᴘʀᴏᴠɪᴅᴇᴅ ʙᴇʟᴏᴡ, ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. !
+HELP_TXT = """<b><blockquote>⚠️ Hᴇʏ, {} × ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. !
 
 ❗Fᴀᴄɪɴɢ ᴘʀᴏʙʟᴇᴍs, ᴜsᴇ: /help</b>"""
 
-ABOUT_TXT = """<b>🤖 ᴍʏ ɴᴀᴍᴇ: tessia
+ABOUT_TXT = """<b>🤖 ᴍʏ ɴᴀᴍᴇ: Gojo
 <b>» ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href=https://t.me/i_killed_my_clan>ᴏʙɪᴛᴏ</a></b>"""
 
 SHORT_MSG = "Your Link is down here click on Short URL.."
