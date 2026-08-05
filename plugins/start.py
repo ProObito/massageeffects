@@ -144,7 +144,7 @@ async def start_command(client: Client, message: Message):
         return
     else:
         reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("• ʜᴇʟᴘ", callback_data='help'),
+            [InlineKeyboardButton("• ᴀɴɪᴍᴇ ʜᴜʙ", url='https://t.me/Tutorial_Hub_94/4'),
              InlineKeyboardButton("ᴀʙᴏᴜᴛ •", callback_data='about')],
             [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data='close')]
         ])
@@ -179,7 +179,7 @@ async def short_url(client: Client, message: Message, base64_string):
                 InlineKeyboardButton(text="Click to download your file", url=short_link)
             ],
             [
-                InlineKeyboardButton(text="How to Open", url="https://t.me/AnimeInHindi094/1066"),
+                InlineKeyboardButton(text="How to Open", url="https://t.me/Tutorial_Hub_94/4"),
                 InlineKeyboardButton(text="Premium", url="https://t.me/+lZ_rLJwBKnllODY1")
             ]
         ]
