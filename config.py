@@ -32,8 +32,8 @@ FORCESUB_CHANNEL2 = int(os.environ.get("FORCESUB_CHANNEL2", "0"))
 TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "4"))
 
 #pics
-START_PIC = os.environ.get("START_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
-FORCE_PIC = os.environ.get("FORCE_PIC", "https://envs.sh/ZUb.png?2ftEB=1")
+START_PIC = os.environ.get("START_PIC", "https://files.catbox.moe/43de6v.jpg")
+FORCE_PIC = os.environ.get("FORCE_PIC", "https://files.catbox.moe/43de6v.jpg")
 
 #text
 HELP_TXT = """<b><blockquote>⚠️ Hᴇʏ, {} × ᴛʜᴇɴ ᴛʀʏ ᴀɢᴀɪɴ.. !
