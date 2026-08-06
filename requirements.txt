@@ -3,6 +3,6 @@ TgCrypto==1.2.5
 pyromod==1.5
 pymongo
 dnspython==2.3.0
-aiohttp
+aiohttp==3.12.15
 requests
 motor
